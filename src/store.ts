@@ -79,6 +79,8 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+export const subscribeState = subscribe;
+
 export function useStore<T>(selector: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => selector(state));
 }
