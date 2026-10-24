@@ -2550,3 +2550,292 @@ button.primary:disabled {
 .item.locked {
   cursor: not-allowed;
 }
+
+/* ------------------------------------------------------------ responsive: phone, tablet, touch */
+
+html,
+body {
+  overscroll-behavior: none;
+}
+.app {
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.toolbar .tool,
+.topbar button,
+.selection-bar button {
+  touch-action: manipulation;
+}
+.canvas,
+.item {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+.item.armed > .card,
+.item.armed > .column,
+.item.armed > .board-card .board-tile,
+.item.armed > .heading {
+  transform: scale(1.03);
+  box-shadow: var(--card-shadow-lift);
+  transition: transform 0.12s ease;
+}
+
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--toolbar);
+  color: #fff;
+  padding: 6px;
+  border-radius: 12px;
+  box-shadow: var(--card-shadow-lift);
+  z-index: 60;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+}
+.selection-bar button {
+  border: 0;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.selection-bar button.danger {
+  color: #ff8a9b;
+}
+.sel-count {
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* Touch screens (phones and iPads): bigger targets. */
+@media (pointer: coarse) {
+  .resize-handle {
+    right: -12px;
+    width: 18px;
+    height: 48px;
+  }
+  .line-handle {
+    r: 12px;
+  }
+  .format-bar button {
+    min-width: 34px;
+    height: 34px;
+  }
+  .todo-items input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+  .menu > button,
+  .menu-link,
+  .menu-sub > button {
+    padding: 11px 12px;
+    font-size: 15px;
+  }
+  .swatch-dot,
+  .custom-color {
+    width: 28px;
+    height: 28px;
+  }
+  .due-add {
+    opacity: 0.8;
+  }
+  kbd {
+    display: none;
+  }
+}
+
+/* Tablets in portrait and small laptops. */
+@media (max-width: 1024px) {
+  .search-btn {
+    min-width: 0;
+  }
+  .search-btn kbd {
+    display: none;
+  }
+}
+
+/* Phones. */
+@media (max-width: 720px) {
+  .main {
+    flex-direction: column-reverse;
+  }
+  .toolbar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    gap: 0;
+    flex: none;
+  }
+  .toolbar .tool {
+    min-width: 58px;
+    padding: 6px 2px 4px;
+  }
+  .toolbar .tool span {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .toolbar-spacer {
+    display: none;
+  }
+  .brand {
+    width: 48px;
+  }
+  .topbar {
+    gap: 6px;
+    padding-right: 6px;
+  }
+  .topbar .hide-sm,
+  .btn-group.zoom,
+  .save-status {
+    display: none;
+  }
+  .crumb {
+    max-width: 120px;
+  }
+  .crumb-wrap:not(:last-child):not(:nth-last-child(2)) {
+    display: none;
+  }
+  .search-btn {
+    padding: 0 8px;
+  }
+  .search-btn span {
+    display: none;
+  }
+  .side-panel {
+    width: 100%;
+    border-left: 0;
+  }
+  .overlay {
+    padding: 8px;
+  }
+  .palette-input {
+    font-size: 16px; /* stops iOS zooming into the field */
+  }
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  .palette-filters {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .result-where {
+    display: none;
+  }
+  /* Menus become bottom sheets. */
+  .menu:not(.dropdown):not(.table-menu) {
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    width: 100%;
+    max-height: 72vh;
+    overflow-y: auto;
+    border-radius: 14px 14px 0 0;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .table-menu {
+    left: 8px !important;
+    right: 8px;
+    width: auto;
+  }
+  .selection-bar {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  /* Editors go full screen. */
+  .doc-overlay,
+  .draw-overlay {
+    padding: 0;
+  }
+  .doc-sheet,
+  .draw-shell {
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+  }
+  .doc-sheet-title {
+    padding: 16px 18px 4px;
+    font-size: 22px;
+  }
+  .doc-sheet-body {
+    padding: 0 18px 30px;
+  }
+  .doc-sheet-body .format-bar {
+    margin: 0 -18px 10px;
+    padding: 4px 18px;
+  }
+  .format-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .draw-stage {
+    padding: 8px;
+  }
+  .draw-paper {
+    width: 100%;
+  }
+  .draw-tools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .shortcut-sections {
+    columns: 1;
+  }
+  .empty-hint {
+    width: calc(100% - 32px);
+  }
+  .presentation-hud .hud-hint {
+    display: none;
+  }
+  .toast {
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* Text that sits directly on the board follows the board colour, not the theme. */
+.canvas.dark-bg {
+  --dot: rgba(255, 255, 255, 0.18);
+}
+.canvas.dark-bg .heading:not(.heading-input),
+.canvas.dark-bg .item:not(.in-column) > .board-card .board-title,
+.canvas.dark-bg .item:not(.in-column) > .board-card .board-meta,
+.canvas.dark-bg .item:not(.in-column) > .card-caption,
+.canvas.dark-bg .empty-hint,
+.canvas.dark-bg .empty-hint h2,
+.canvas.dark-bg .line-label {
+  color: #f1f2f4;
+  fill: #f1f2f4;
+}
+.canvas.dark-bg .line-label {
+  stroke: rgba(0, 0, 0, 0.5);
+}
+.canvas.dark-bg .line-stroke {
+  stroke: #c9ccd2;
+}
+.canvas.dark-bg .arrow-head {
+  fill: #c9ccd2;
+}
+.canvas.light-bg {
+  --dot: rgba(0, 0, 0, 0.16);
+}
+.canvas.light-bg .heading:not(.heading-input),
+.canvas.light-bg .item:not(.in-column) > .board-card .board-title,
+.canvas.light-bg .empty-hint h2 {
+  color: #24262b;
+}

@@ -28,6 +28,7 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
     inColumn ? 'in-column' : '',
     dragging ? (inColumn ? 'drag-source' : 'dragging') : '',
     dropTarget ? 'drop-target' : '',
+    ctx.armedId === id ? 'armed' : '',
   ]
     .filter(Boolean)
     .join(' ');

@@ -25,6 +25,9 @@ import {
   zoomAt,
   centerOn,
   getRect,
+  canvasRect,
+  MIN_ZOOM,
+  MAX_ZOOM,
 } from '../viewport';
 import { addFiles, addLink, addTextNote, boardUrl, columnIndexAt, isUrl, moveToBoard } from '../actions';
 import { openDrawing } from '../elements/Sketch';
@@ -34,10 +37,13 @@ import { CanvasContext, type CanvasApi, type DragState, type DropTarget } from '
 import { ItemFrame } from './ItemFrame';
 import { LinesLayer, type LineDraft } from './LinesLayer';
 import { ContextMenu, type MenuState } from './ContextMenu';
+import { SelectionBar } from './SelectionBar';
 import { ElementBody } from '../elements/ElementBody';
 
 type Gesture =
-  | { kind: 'pan'; startX: number; startY: number; vx: number; vy: number }
+  | { kind: 'pan'; startX: number; startY: number; vx: number; vy: number; touchTap?: { t0: number; moved: boolean } }
+  | { kind: 'pinch'; d0: number; mid0: { x: number; y: number }; vp0: { x: number; y: number; zoom: number } }
+  | { kind: 'touch-item'; id: string; startX: number; startY: number; vx: number; vy: number; t0: number; armed: boolean; wasSelected: boolean }
   | { kind: 'marquee'; start: { x: number; y: number }; base: string[] }
   | {
       kind: 'item';
@@ -54,6 +60,10 @@ type Gesture =
   | { kind: 'line-end'; lineId: string; which: 'from' | 'to' };
 
 const DRAG_THRESHOLD = 4;
+// Touch: hold this long before a card can be dragged (otherwise the finger pans the board).
+const LONG_PRESS_MS = 380;
+const MENU_PRESS_MS = 750;
+const TAP_SLOP = 8;
 // Clicking an already-selected card of these types starts editing it.
 const CLICK_TO_EDIT = new Set(['note', 'heading', 'todo', 'column', 'link', 'swatch', 'table', 'comment']);
 
@@ -100,6 +110,7 @@ export function Canvas() {
     return b?.type === 'board' ? `${b.content.background ?? ''}|${b.content.hideGrid ? 1 : 0}` : '|0';
   });
   const [background, hideGrid] = appearance.split('|');
+  const darkBackground = isDark(background);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -110,6 +121,16 @@ export function Canvas() {
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [lineDraft, setLineDraft] = useState<LineDraft | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [armedId, setArmedId] = useState<string | null>(null);
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  // Touch taps are handled by handleTap; ignore the browser's synthetic dblclick/contextmenu for them.
+  const lastPointerType = useRef('mouse');
+  const timers = useRef<number[]>([]);
+  const lastTap = useRef<{ t: number; x: number; y: number; id: string | null }>({ t: 0, x: 0, y: 0, id: null });
+  const clearTimers = () => {
+    timers.current.forEach((t) => clearTimeout(t));
+    timers.current = [];
+  };
 
   useEffect(() => {
     registerCanvas(canvasRef.current, boardId);
@@ -232,7 +253,8 @@ export function Canvas() {
   const onBackgroundPointerDown = (e: RPointerEvent) => {
     setMenu(null);
     if (e.button === 2) return;
-    if (e.button === 1 || spaceDown.current || (e.pointerType === 'touch' && !tool)) return startPan(e);
+    if (e.pointerType === 'touch' && !tool) return startTouchBackground(e);
+    if (e.button === 1 || spaceDown.current) return startPan(e);
     if (e.button !== 0) return;
     if (isTypingTarget(document.activeElement)) (document.activeElement as HTMLElement).blur();
     if (tool === 'line') return startLine(e, null);
@@ -274,6 +296,7 @@ export function Canvas() {
       capture(e);
       return;
     }
+    if (e.pointerType === 'touch') return startTouchItem(e, el.id, state.selection.includes(el.id));
     const wasSelected = state.selection.includes(el.id);
     let selection = state.selection;
     if (e.shiftKey) selection = wasSelected ? selection : [...selection, el.id];
@@ -290,6 +313,97 @@ export function Canvas() {
       ids: selection,
     };
     // Pointer capture starts with the drag itself, so clicks and double-clicks still reach the card.
+  };
+
+  // ------------------------------------------------------------ touch
+
+  // One finger on empty board pans; holding still first starts a selection box.
+  const startTouchBackground = (e: RPointerEvent) => {
+    const v = getViewport(boardId);
+    gesture.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, vx: v.x, vy: v.y, touchTap: { t0: Date.now(), moved: false } };
+    capture(e);
+    const start = screenToWorld(e.clientX, e.clientY);
+    clearTimers();
+    timers.current.push(
+      window.setTimeout(() => {
+        const g = gesture.current;
+        if (g?.kind === 'pan' && g.touchTap && !g.touchTap.moved) {
+          navigator.vibrate?.(10);
+          gesture.current = { kind: 'marquee', start, base: [] };
+          setState({ selection: [], editingId: null });
+        }
+      }, LONG_PRESS_MS + 120),
+    );
+  };
+
+  // One finger on a card: a quick swipe pans, a hold arms dragging, a longer still hold opens the menu.
+  const startTouchItem = (e: RPointerEvent, id: string, wasSelected: boolean) => {
+    const v = getViewport(boardId);
+    gesture.current = { kind: 'touch-item', id, startX: e.clientX, startY: e.clientY, vx: v.x, vy: v.y, t0: Date.now(), armed: false, wasSelected };
+    capture(e);
+    clearTimers();
+    const x = e.clientX;
+    const y = e.clientY;
+    timers.current.push(
+      window.setTimeout(() => {
+        const g = gesture.current;
+        if (g?.kind !== 'touch-item' || g.id !== id) return;
+        g.armed = true;
+        navigator.vibrate?.(8);
+        setArmedId(id);
+        const sel = getState().selection;
+        if (!sel.includes(id)) setState({ selection: [id], editingId: null });
+      }, LONG_PRESS_MS),
+      window.setTimeout(() => {
+        const g = gesture.current;
+        if (g?.kind !== 'touch-item' || g.id !== id || !g.armed) return;
+        gesture.current = null;
+        setArmedId(null);
+        const sel = getState().selection;
+        setMenu({ x, y, targetIds: sel.includes(id) ? sel : [id] });
+      }, MENU_PRESS_MS),
+    );
+  };
+
+  const onPointerDownCapture = (e: RPointerEvent) => {
+    lastPointerType.current = e.pointerType;
+    if (e.pointerType !== 'touch') return;
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.current.size !== 2) return;
+    // Second finger: switch to pinch zoom, abandoning whatever the first finger started.
+    e.stopPropagation();
+    clearTimers();
+    setArmedId(null);
+    setDrag(null);
+    setMarquee(null);
+    setLineDraft(null);
+    const [a, b] = [...touches.current.values()];
+    gesture.current = {
+      kind: 'pinch',
+      d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+      mid0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      vp0: { ...getViewport(boardId) },
+    };
+    capture(e);
+  };
+
+  const handleTap = (e: RPointerEvent, id: string | null, wasSelected: boolean) => {
+    const now = Date.now();
+    const prev = lastTap.current;
+    const isDouble = now - prev.t < 320 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 30 && prev.id === id;
+    lastTap.current = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY, id };
+    const el = id ? getState().elements[id] : undefined;
+    if (!id) {
+      if (isDouble) {
+        const p = screenToWorld(e.clientX, e.clientY);
+        addElements([makeElement('note', { x: Math.round(p.x - 20), y: Math.round(p.y - 20) })], { edit: true });
+      } else setState({ selection: [], editingId: null });
+      return;
+    }
+    if (!el) return;
+    if (isDouble) return onItemDoubleClick(e as unknown as React.MouseEvent, el);
+    if (wasSelected && getState().selection.length === 1 && CLICK_TO_EDIT.has(el.type)) startEditing(id);
+    else setState({ selection: [id], editingId: getState().editingId === id ? id : null });
   };
 
   const onLineHandleDown = (e: RPointerEvent, lineId: string, which: 'from' | 'to') => {
@@ -328,11 +442,55 @@ export function Canvas() {
   }
 
   const onPointerMove = (e: RPointerEvent) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gesture.current;
     if (!g) return;
     const p = screenToWorld(e.clientX, e.clientY);
     switch (g.kind) {
+      case 'pinch': {
+        if (touches.current.size < 2) return;
+        const [a, b] = [...touches.current.values()];
+        const r = canvasRect();
+        const left = r?.left ?? 0;
+        const top = r?.top ?? 0;
+        const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (g.vp0.zoom * Math.hypot(a.x - b.x, a.y - b.y)) / g.d0));
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const wx = (g.mid0.x - left - g.vp0.x) / g.vp0.zoom;
+        const wy = (g.mid0.y - top - g.vp0.y) / g.vp0.zoom;
+        setViewport(boardId, { zoom, x: mid.x - left - wx * zoom, y: mid.y - top - wy * zoom });
+        break;
+      }
+      case 'touch-item': {
+        const dist = Math.hypot(e.clientX - g.startX, e.clientY - g.startY);
+        if (dist < TAP_SLOP) return;
+        clearTimers();
+        setArmedId(null);
+        if (!g.armed) {
+          // Moved before the hold: treat it as panning the board.
+          gesture.current = { kind: 'pan', startX: g.startX, startY: g.startY, vx: g.vx, vy: g.vy };
+          setViewport(boardId, { ...getViewport(boardId), x: g.vx + e.clientX - g.startX, y: g.vy + e.clientY - g.startY });
+          return;
+        }
+        // Held, then moved: drag the card (and the rest of the selection).
+        const sel = getState().selection.includes(g.id) ? getState().selection : [g.id];
+        gesture.current = {
+          kind: 'item',
+          id: g.id,
+          startClient: { x: g.startX, y: g.startY },
+          startWorld: screenToWorld(g.startX, g.startY),
+          moved: false,
+          wasSelected: true,
+          shift: false,
+          ids: sel,
+        };
+        onPointerMove(e);
+        return;
+      }
       case 'pan': {
+        if (g.touchTap && !g.touchTap.moved && Math.hypot(e.clientX - g.startX, e.clientY - g.startY) > TAP_SLOP) {
+          g.touchTap.moved = true;
+          clearTimers();
+        }
         const v = getViewport(boardId);
         setViewport(boardId, { ...v, x: g.vx + e.clientX - g.startX, y: g.vy + e.clientY - g.startY });
         break;
@@ -442,11 +600,25 @@ export function Canvas() {
   };
 
   const onPointerUp = (e: RPointerEvent) => {
+    if (e.pointerType === 'touch') touches.current.delete(e.pointerId);
     const g = gesture.current;
+    if (g?.kind === 'pinch') {
+      // Lifting one of two fingers ends the pinch; the other finger does nothing until lifted.
+      if (touches.current.size < 2) gesture.current = null;
+      return;
+    }
     gesture.current = null;
+    clearTimers();
+    setArmedId(null);
     if (!spaceDown.current) setPanning(false);
     if (!g) return;
     switch (g.kind) {
+      case 'touch-item':
+        if (e.type === 'pointerup') handleTap(e, g.id, g.wasSelected);
+        break;
+      case 'pan':
+        if (g.touchTap && !g.touchTap.moved && e.type === 'pointerup') handleTap(e, null, false);
+        break;
       case 'marquee':
         setMarquee(null);
         break;
@@ -489,6 +661,7 @@ export function Canvas() {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (lastPointerType.current === 'touch') return;
     if (e.target !== canvasRef.current && e.target !== worldRef.current) return;
     const p = screenToWorld(e.clientX, e.clientY);
     const note = makeElement('note', { x: Math.round(p.x - 20), y: Math.round(p.y - 20) });
@@ -496,7 +669,8 @@ export function Canvas() {
   };
 
   const onItemDoubleClick: CanvasApi['onItemDoubleClick'] = (e, el) => {
-    e.stopPropagation();
+    e.stopPropagation?.();
+    if (e.type === 'dblclick' && lastPointerType.current === 'touch') return;
     if (el.type === 'board' && (e.ctrlKey || e.metaKey)) window.open(boardUrl(el.id), '_blank');
     else if (el.type === 'board') navigate(el.id);
     else if (el.type === 'alias') {
@@ -511,6 +685,7 @@ export function Canvas() {
   const onItemContextMenu: CanvasApi['onItemContextMenu'] = (e, el) => {
     e.preventDefault();
     e.stopPropagation();
+    if (lastPointerType.current === 'touch') return;
     const sel = getState().selection;
     if (!sel.includes(el.id)) setState({ selection: [el.id], editingId: null });
     setMenu({ x: e.clientX, y: e.clientY, targetIds: sel.includes(el.id) ? sel : [el.id] });
@@ -518,6 +693,7 @@ export function Canvas() {
 
   const onBackgroundContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (lastPointerType.current === 'touch') return;
     setState({ selection: [], editingId: null });
     setMenu({ x: e.clientX, y: e.clientY, targetIds: [], world: screenToWorld(e.clientX, e.clientY) });
   };
@@ -547,7 +723,7 @@ export function Canvas() {
 
   // ------------------------------------------------------------ render
 
-  const api: CanvasApi = { drag, onItemPointerDown, onItemDoubleClick, onItemContextMenu, observe: (n) => n && observer.observe(n) };
+  const api: CanvasApi = { drag, armedId, onItemPointerDown, onItemDoubleClick, onItemContextMenu, observe: (n) => n && observer.observe(n) };
   const grid = 24 * vp.zoom;
   const ghosts = drag ? drag.ids.filter((id) => getState().elements[id]?.columnId) : [];
 
@@ -555,13 +731,14 @@ export function Canvas() {
     <CanvasContext.Provider value={api}>
       <div
         ref={canvasRef}
-        className={`canvas ${panning ? 'panning' : ''} ${tool === 'line' ? 'tool-line' : ''}`}
+        className={`canvas ${panning ? 'panning' : ''} ${tool === 'line' ? 'tool-line' : ''} ${darkBackground ? 'dark-bg' : background ? 'light-bg' : ''}`}
         style={{
           backgroundSize: `${grid}px ${grid}px`,
           backgroundPosition: `${vp.x}px ${vp.y}px`,
           backgroundColor: background || undefined,
           backgroundImage: hideGrid === '1' ? 'none' : undefined,
         }}
+        onPointerDownCapture={onPointerDownCapture}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -591,8 +768,17 @@ export function Canvas() {
         {loaded && topLevel.length === 0 && <EmptyBoardHint />}
       </div>
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
+      {!menu && <SelectionBar onMenu={setMenu} />}
     </CanvasContext.Provider>
   );
+}
+
+// Whether a custom board colour needs light text on top of it.
+function isDark(hex: string) {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return false;
+  const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45;
 }
 
 export function lineBox(el: El | undefined): Rect | null {
@@ -611,7 +797,11 @@ function EmptyBoardHint() {
   return (
     <div className="empty-hint">
       <h2>This board is empty</h2>
-      <p>Double-click anywhere to write a note, drag a tool in from the left, or drop images, files and links here.</p>
+      {matchMedia('(pointer: coarse)').matches ? (
+        <p>Double-tap anywhere to write a note, or tap a tool below. Pinch to zoom, drag with one finger to move around, and press and hold a card to move it.</p>
+      ) : (
+        <p>Double-click anywhere to write a note, drag a tool in from the left, or drop images, files and links here.</p>
+      )}
     </div>
   );
 }

@@ -13,6 +13,8 @@ export interface DragState {
 
 export interface CanvasApi {
   drag: DragState | null;
+  // Card held long enough on a touch screen to be dragged.
+  armedId: string | null;
   onItemPointerDown(e: PointerEvent, el: El): void;
   onItemDoubleClick(e: MouseEvent, el: El): void;
   onItemContextMenu(e: MouseEvent, el: El): void;
