@@ -39,6 +39,7 @@ For development with hot reload: `npm run dev` (same port; Vite runs inside the 
 
    ```bash
    echo 'CANVASNOTES_PASSWORD=choose-a-long-password' > .env
+   mkdir -p data                 # must be writable by uid 1000 (the container's user)
    docker compose up -d          # data is kept in ./data
    ```
 

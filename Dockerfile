@@ -12,6 +12,7 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=5180 DATA_DIR=/data
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
 COPY package.json ./
+RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 EXPOSE 5180
 USER node
