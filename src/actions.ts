@@ -184,8 +184,9 @@ export function addTextNote(text: string, at: Placement = centerPlacement()) {
 
 // ---------------------------------------------------------------- copy / paste / duplicate
 
-const CLIP_MARK = 'canvasnotes/elements:';
+// The system clipboard gets plain text; pasting that same text back pastes the cards instead.
 let internalClipboard: El[] = [];
+let internalClipboardText = '';
 
 // Elements plus everything inside them (column children, board contents).
 function withDependents(ids: string[]): El[] {
@@ -252,7 +253,8 @@ export function copySelection() {
   internalClipboard = withDependents(selection).map((el) => structuredClone(el));
   const rootIds = selection.filter((id) => elements[id]);
   const text = rootIds.map((id) => plainText(elements[id])).filter(Boolean).join('\n\n');
-  void navigator.clipboard?.writeText(`${text}\n${CLIP_MARK}${rootIds.join(',')}`.trim()).catch(() => {});
+  internalClipboardText = text || `canvasnotes:${rootIds.join(',')}`;
+  void navigator.clipboard?.writeText(internalClipboardText).catch(() => {});
   return true;
 }
 
@@ -272,7 +274,7 @@ export function pasteInternal(at: Placement) {
 }
 
 export function clipboardTextIsInternal(text: string) {
-  return text.includes(CLIP_MARK) && internalClipboard.length > 0;
+  return internalClipboard.length > 0 && text.replace(/\r\n/g, '\n') === internalClipboardText;
 }
 
 // ---------------------------------------------------------------- moving between boards
