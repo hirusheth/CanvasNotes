@@ -87,12 +87,12 @@ export function TopBar() {
             ⤢
           </button>
         </div>
-        <button className="icon-btn" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title="Export board">
+        <button className="icon-btn hide-sm" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title="Export board">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
           </svg>
         </button>
-        <button className="icon-btn" onClick={() => setState({ presenting: true, selection: [], editingId: null, panel: null })} title="Presentation mode (Ctrl Shift P)">
+        <button className="icon-btn hide-sm" onClick={() => setState({ presenting: true, selection: [], editingId: null, panel: null })} title="Presentation mode (Ctrl Shift P)">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
             <rect x="3" y="4" width="18" height="13" rx="2" />
             <path d="M10 8v5l4-2.5zM8 21h8M12 17v4" />
@@ -107,7 +107,7 @@ export function TopBar() {
           <kbd>Ctrl K</kbd>
         </button>
         <button
-          className="icon-btn"
+          className="icon-btn hide-sm"
           onClick={() => setTheme(theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system')}
           title={`Theme: ${theme}`}
         >
@@ -213,6 +213,36 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
       >
         Manage labels
       </button>
+      <div className="menu-sep" />
+      <button
+        onClick={() => {
+          onClose();
+          fitRects(getState().boardId, [...allRects().values()]);
+        }}
+      >
+        Zoom to fit <kbd>⇧ 1</kbd>
+      </button>
+      <button
+        onClick={() => {
+          onClose();
+          setState({ presenting: true, selection: [], editingId: null, panel: null });
+        }}
+      >
+        Presentation mode
+      </button>
+      <button
+        onClick={() => {
+          onClose();
+          setTheme(getState().theme === 'dark' ? 'light' : 'dark');
+        }}
+      >
+        Toggle dark mode
+      </button>
+      {getState().authEnabled && (
+        <button className="danger" onClick={() => void api.logout()}>
+          Sign out
+        </button>
+      )}
       <button
         onClick={() => {
           onClose();

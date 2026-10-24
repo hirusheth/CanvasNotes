@@ -3,13 +3,23 @@ import type { El } from './types';
 export type Op = { op: 'put'; el: El } | { op: 'del'; id: string };
 
 async function json<T>(res: Response): Promise<T> {
+  // The session expired or was signed out elsewhere: reload to show the sign-in page.
+  if (res.status === 401) {
+    location.reload();
+    throw new Error('Sign in required');
+  }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
 
-export async function fetchState(): Promise<El[]> {
-  const data = await json<{ elements: El[] }>(await fetch('/api/state'));
-  return data.elements;
+export async function fetchState(): Promise<{ elements: El[]; auth: boolean }> {
+  const data = await json<{ elements: El[]; auth?: boolean }>(await fetch('/api/state'));
+  return { elements: data.elements, auth: !!data.auth };
+}
+
+export async function logout(): Promise<void> {
+  await fetch('/api/logout', { method: 'POST' });
+  location.reload();
 }
 
 export async function applyOps(ops: Op[]): Promise<void> {

@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { openStore } from './store.mjs';
 import { unfurl } from './unfurl.mjs';
 import { buildZip } from './zip.mjs';
+import { createAuth, LOGIN_PAGE } from './auth.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEV = process.argv.includes('--dev');
@@ -28,6 +29,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -81,15 +83,9 @@ async function readJson(req) {
   }
 }
 
-function authorized(req) {
-  if (!PASSWORD) return true;
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Basic ')) return false;
-  const [, pass = ''] = Buffer.from(header.slice(6), 'base64').toString('utf8').split(/:(.*)/s);
-  const a = Buffer.from(pass);
-  const b = Buffer.from(PASSWORD);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
+const auth = createAuth({ password: PASSWORD, dataDir: DATA_DIR });
+// Files the login page itself needs before signing in.
+const PUBLIC_PATHS = new Set(['/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/favicon.svg']);
 
 function serveFile(res, filePath, { immutable = false } = {}) {
   fs.stat(filePath, (err, stat) => {
@@ -114,7 +110,7 @@ async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
   switch (route) {
     case 'GET /api/state':
-      return send(res, 200, { elements: store.all() });
+      return send(res, 200, { elements: store.all(), auth: !!auth });
     case 'POST /api/ops': {
       const { ops } = await readJson(req);
       if (!Array.isArray(ops)) return send(res, 400, { error: 'ops must be an array' });
@@ -211,10 +207,21 @@ if (DEV) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (!authorized(req)) {
-    return send(res, 401, 'Authentication required', { 'www-authenticate': 'Basic realm="Canvas Notes"' });
-  }
+  res.setHeader('x-frame-options', 'SAMEORIGIN');
+  res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   try {
+    if (auth) {
+      if (req.method === 'POST' && url.pathname === '/api/login') {
+        const { password } = await readJson(req);
+        const result = auth.login(req, password);
+        return send(res, result.status, result.body, result.headers);
+      }
+      if (req.method === 'POST' && url.pathname === '/api/logout') return send(res, 200, { ok: true }, auth.logoutHeaders());
+      if (!auth.isAuthed(req) && !PUBLIC_PATHS.has(url.pathname)) {
+        if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/files/')) return send(res, 401, { error: 'Sign in required' });
+        return send(res, 200, LOGIN_PAGE, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      }
+    }
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
     if (url.pathname.startsWith('/files/')) {
       const file = safeJoin(FILES_DIR, url.pathname.slice('/files/'.length));
@@ -239,6 +246,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Canvas Notes ${DEV ? '(dev) ' : ''}running at http://${HOST}:${PORT}`);
   console.log(`Data directory: ${DATA_DIR}`);
+  const local = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+  if (!local && !PASSWORD) {
+    console.warn('WARNING: listening on the network without CANVASNOTES_PASSWORD — anyone who can reach this port can read and edit your notes.');
+  }
 });
 
 function shutdown() {

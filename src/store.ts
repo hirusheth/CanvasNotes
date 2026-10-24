@@ -31,6 +31,7 @@ export interface State {
   modal: Modal | null;
   captionEditId: string | null;
   presenting: boolean;
+  authEnabled: boolean;
 }
 
 type Patch = Partial<Omit<El, 'content'>> & { content?: Partial<El['content']> };
@@ -73,6 +74,7 @@ let state: State = {
   modal: null,
   captionEditId: null,
   presenting: false,
+  authEnabled: false,
 };
 
 const listeners = new Set<() => void>();
@@ -157,10 +159,10 @@ window.addEventListener('beforeunload', (e) => {
 
 export async function load() {
   try {
-    const elements = await api.fetchState();
+    const { elements, auth } = await api.fetchState();
     const map: Record<string, El> = {};
     for (const el of elements) map[el.id] = el;
-    setState({ elements: map, loaded: true, loadError: null });
+    setState({ elements: map, loaded: true, loadError: null, authEnabled: auth });
     if (state.boardId !== ROOT_ID && !map[state.boardId]) navigate(ROOT_ID);
   } catch (err) {
     setState({ loadError: err instanceof Error ? err.message : String(err) });

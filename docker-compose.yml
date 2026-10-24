@@ -1,0 +1,12 @@
+# docker compose up -d   → http://<server>:5180 (put HTTPS in front, see README)
+services:
+  canvasnotes:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5180:5180"
+    environment:
+      # Required when the app is reachable from other devices.
+      CANVASNOTES_PASSWORD: ${CANVASNOTES_PASSWORD:?set CANVASNOTES_PASSWORD in .env}
+    volumes:
+      - ./data:/data
