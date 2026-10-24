@@ -1,0 +1,168 @@
+// Per-board pan/zoom, kept out of the element store so panning does not
+// re-render every card. Also holds the measured world rect of every rendered
+// element, used for lines, drop targets and "fit to content".
+import { useSyncExternalStore } from 'react';
+import type { Rect, Viewport } from './types';
+
+const DEFAULT_VP: Viewport = { x: 120, y: 90, zoom: 1 };
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 3;
+
+const viewports: Record<string, Viewport> = {};
+const vpListeners = new Set<() => void>();
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function getViewport(boardId: string): Viewport {
+  if (!viewports[boardId]) {
+    let vp = DEFAULT_VP;
+    try {
+      const raw = localStorage.getItem(`cn:vp:${boardId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if ([parsed.x, parsed.y, parsed.zoom].every((n) => typeof n === 'number' && Number.isFinite(n))) vp = parsed;
+      }
+    } catch {}
+    viewports[boardId] = vp;
+  }
+  return viewports[boardId];
+}
+
+export function setViewport(boardId: string, vp: Viewport) {
+  viewports[boardId] = { ...vp, zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom)) };
+  vpListeners.forEach((l) => l());
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(`cn:vp:${boardId}`, JSON.stringify(viewports[boardId]));
+    } catch {}
+  }, 300);
+}
+
+export function useViewport(boardId: string): Viewport {
+  return useSyncExternalStore(
+    (l) => {
+      vpListeners.add(l);
+      return () => vpListeners.delete(l);
+    },
+    () => getViewport(boardId),
+  );
+}
+
+// ---------------------------------------------------------------- canvas geometry
+
+let canvasNode: HTMLElement | null = null;
+let currentBoard = 'root';
+
+export function registerCanvas(node: HTMLElement | null, boardId: string) {
+  canvasNode = node;
+  currentBoard = boardId;
+}
+
+export function canvasRect(): DOMRect | null {
+  return canvasNode?.getBoundingClientRect() ?? null;
+}
+
+export function isOverCanvas(clientX: number, clientY: number): boolean {
+  const r = canvasRect();
+  if (!r || clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return false;
+  const hit = document.elementFromPoint(clientX, clientY);
+  return !!hit && !!canvasNode && canvasNode.contains(hit);
+}
+
+export function screenToWorld(clientX: number, clientY: number, boardId = currentBoard) {
+  const r = canvasRect();
+  const vp = getViewport(boardId);
+  return { x: (clientX - (r?.left ?? 0) - vp.x) / vp.zoom, y: (clientY - (r?.top ?? 0) - vp.y) / vp.zoom };
+}
+
+export function viewCenter(boardId = currentBoard) {
+  const r = canvasRect();
+  return screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2, boardId);
+}
+
+export function zoomAt(boardId: string, factor: number, clientX?: number, clientY?: number) {
+  const r = canvasRect();
+  const vp = getViewport(boardId);
+  const cx = clientX ?? (r ? r.left + r.width / 2 : 0);
+  const cy = clientY ?? (r ? r.top + r.height / 2 : 0);
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * factor));
+  const px = cx - (r?.left ?? 0);
+  const py = cy - (r?.top ?? 0);
+  setViewport(boardId, { zoom, x: px - ((px - vp.x) * zoom) / vp.zoom, y: py - ((py - vp.y) * zoom) / vp.zoom });
+}
+
+export function centerOn(boardId: string, rect: Rect, zoom?: number) {
+  const r = canvasRect();
+  const vp = getViewport(boardId);
+  const z = zoom ?? vp.zoom;
+  const w = r?.width ?? 800;
+  const h = r?.height ?? 600;
+  setViewport(boardId, { zoom: z, x: w / 2 - (rect.x + rect.w / 2) * z, y: h / 2 - (rect.y + rect.h / 2) * z });
+}
+
+export function fitRects(boardId: string, list: Rect[]) {
+  const r = canvasRect();
+  if (!r) return;
+  if (list.length === 0) return setViewport(boardId, DEFAULT_VP);
+  const box = union(list);
+  const pad = 80;
+  const zoom = Math.min(1.25, Math.max(MIN_ZOOM, Math.min((r.width - pad * 2) / box.w, (r.height - pad * 2) / box.h)));
+  centerOn(boardId, box, zoom);
+}
+
+// ---------------------------------------------------------------- measured rects
+
+let rects = new Map<string, Rect>();
+let rectsVersion = 0;
+const rectListeners = new Set<() => void>();
+
+export function getRect(id: string): Rect | undefined {
+  return rects.get(id);
+}
+
+export function allRects(): Map<string, Rect> {
+  return rects;
+}
+
+export function replaceRects(next: Map<string, Rect>) {
+  let changed = next.size !== rects.size;
+  if (!changed) {
+    for (const [id, r] of next) {
+      const o = rects.get(id);
+      if (!o || o.x !== r.x || o.y !== r.y || o.w !== r.w || o.h !== r.h) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (!changed) return;
+  rects = next;
+  rectsVersion++;
+  rectListeners.forEach((l) => l());
+}
+
+export function useRectsVersion(): number {
+  return useSyncExternalStore(
+    (l) => {
+      rectListeners.add(l);
+      return () => rectListeners.delete(l);
+    },
+    () => rectsVersion,
+  );
+}
+
+export function union(list: Rect[]): Rect {
+  const x1 = Math.min(...list.map((r) => r.x));
+  const y1 = Math.min(...list.map((r) => r.y));
+  const x2 = Math.max(...list.map((r) => r.x + r.w));
+  const y2 = Math.max(...list.map((r) => r.y + r.h));
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+export function contains(r: Rect, p: { x: number; y: number }, pad = 0) {
+  return p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+}
+
+export function intersects(a: Rect, b: Rect) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
