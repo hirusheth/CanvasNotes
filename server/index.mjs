@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { openStore } from './store.mjs';
 import { unfurl } from './unfurl.mjs';
+import { buildZip } from './zip.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEV = process.argv.includes('--dev');
@@ -152,9 +153,54 @@ async function handleApi(req, res, url) {
       store.importAll(elements, mode === 'replace');
       return send(res, 200, { ok: true, imported: elements.length });
     }
-    default:
+    default: {
+      const zipMatch = req.method === 'GET' && url.pathname.match(/^\/api\/board-files\/([\w-]+)$/);
+      if (zipMatch) return sendBoardZip(res, zipMatch[1]);
       return send(res, 404, { error: 'Unknown API route' });
+    }
   }
+}
+
+// Every uploaded image/file on a board and its sub-boards, as one ZIP.
+function sendBoardZip(res, boardId) {
+  const all = store.all();
+  const byParent = new Map();
+  for (const el of all) {
+    if (el.section === 'trash') continue;
+    if (!byParent.has(el.parentId)) byParent.set(el.parentId, []);
+    byParent.get(el.parentId).push(el);
+  }
+  const entries = [];
+  const used = new Set();
+  const walk = (id, prefix, seen) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    for (const el of byParent.get(id) || []) {
+      const src = el.type === 'image' || el.type === 'file' ? el.content?.src : null;
+      if (src && src.startsWith('/files/')) {
+        const file = safeJoin(FILES_DIR, src.slice('/files/'.length));
+        if (file && fs.existsSync(file)) {
+          const base = (el.type === 'file' ? el.content.name : el.content.caption) || path.basename(file);
+          let name = prefix + base.replace(/[\\/:*?"<>|]+/g, '-');
+          if (!path.extname(name)) name += path.extname(file);
+          let n = 1;
+          while (used.has(name)) name = name.replace(/(\.[^.]*)?$/, (ext) => ` (${n++})${ext}`);
+          used.add(name);
+          entries.push({ name, data: fs.readFileSync(file) });
+        }
+      }
+      if (el.type === 'board') walk(el.id, `${prefix}${(el.content?.title || 'board').replace(/[\\/:*?"<>|]+/g, '-')}/`, seen);
+    }
+  };
+  walk(boardId, '', new Set());
+  if (entries.length === 0) return send(res, 404, 'No files found on this board');
+  const zip = buildZip(entries);
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-length': zip.length,
+    'content-disposition': `attachment; filename="canvasnotes-files-${boardId}.zip"`,
+  });
+  res.end(zip);
 }
 
 let vite = null;

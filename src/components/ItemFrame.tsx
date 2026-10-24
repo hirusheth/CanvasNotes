@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import { useElement, useStore } from '../store';
 import { ElementBody } from '../elements/ElementBody';
+import { CardExtras } from '../elements/MoreBodies';
 import { useCanvas } from './canvasContext';
 
-const RESIZABLE = new Set(['note', 'todo', 'image', 'link', 'column', 'file', 'swatch']);
+const RESIZABLE = new Set(['note', 'heading', 'todo', 'image', 'link', 'column', 'file', 'swatch', 'sketch', 'table', 'document', 'comment']);
 
 // Positions one element on the canvas (or in a column) and routes its pointer
 // events to the canvas, which owns selection and dragging.
@@ -20,7 +21,8 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
   const classes = [
     'item',
     `item-${el.type}`,
-    el.color ? `color-${el.color}` : '',
+    el.color ? (el.color.startsWith('#') ? 'color-custom' : `color-${el.color}`) : '',
+    el.locked ? 'locked' : '',
     selected ? 'selected' : '',
     editing ? 'editing' : '',
     inColumn ? 'in-column' : '',
@@ -30,12 +32,14 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
     .filter(Boolean)
     .join(' ');
 
+  const custom = el.color?.startsWith('#') ? ({ '--custom-color': el.color } as React.CSSProperties) : undefined;
   const style = inColumn
-    ? undefined
+    ? custom
     : {
+        ...custom,
         left: el.x,
         top: el.y,
-        width: el.type === 'board' ? undefined : el.w,
+        width: el.type === 'board' || el.type === 'alias' ? undefined : el.w,
         zIndex: dragging ? 1_000_000 + el.z : el.z,
         transform: dragging ? `translate(${drag!.dx}px, ${drag!.dy}px)` : undefined,
       };
@@ -51,7 +55,8 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
       onContextMenu={(e) => ctx.onItemContextMenu(e, el)}
     >
       <ElementBody el={el} editing={editing} selected={selected} />
-      {selected && !inColumn && !editing && RESIZABLE.has(el.type) && <div className="resize-handle" data-resize title="Drag to resize" />}
+      <CardExtras el={el} />
+      {selected && !inColumn && !editing && !el.locked && RESIZABLE.has(el.type) && <div className="resize-handle" data-resize title="Drag to resize" />}
     </div>
   );
 });

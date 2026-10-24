@@ -97,6 +97,7 @@ export function LinesLayer({ boardId, draft, drag, onLinePointerDown, onHandlePo
               x2={b.x}
               y2={b.y}
               className="line-stroke"
+              style={line.content.weight ? { strokeWidth: line.content.weight } : undefined}
               strokeDasharray={dashed ? '8 6' : undefined}
               markerEnd={arrow !== 'none' ? 'url(#arrow)' : undefined}
               markerStart={arrow === 'both' ? 'url(#arrow)' : undefined}

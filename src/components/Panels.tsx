@@ -1,11 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { boardPath, deleteForever, getState, navigate, restoreElement, setState, useStore } from '../store';
-import { ROOT_ID, type El } from '../types';
-import { plainText } from '../actions';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import {
+  addElements,
+  boardPath,
+  commit,
+  deleteForever,
+  getState,
+  makeElement,
+  navigate,
+  patchElement,
+  restoreElement,
+  setState,
+  setTheme,
+  useStore,
+  dependents,
+  uid,
+} from '../store';
+import { LABELS_PARENT, ROOT_ID, SYSTEM_PARENT, TEMPLATES_PARENT, type El, type ElementOf } from '../types';
+import { plainText, columnAt, boardUrl, copyText } from '../actions';
+import { useLabels } from './Modals';
+import { isOverCanvas, screenToWorld, allRects, union, canvasRect } from '../viewport';
+import { exportBoardMarkdown, exportBoardPng, exportBoardText, exportBoardWord } from '../exporters';
+import { ElementBody } from '../elements/ElementBody';
+import { getToolbarPrefs, setToolbarPrefs, ALL_TOOL_IDS, TOOL_LABELS } from './toolbarPrefs';
 
-const TYPE_LABEL: Record<El['type'], string> = {
+export const TYPE_LABEL: Record<El['type'], string> = {
   note: 'Note',
+  heading: 'Heading',
   board: 'Board',
+  alias: 'Shortcut',
   column: 'Column',
   todo: 'To-do',
   image: 'Image',
@@ -13,6 +35,11 @@ const TYPE_LABEL: Record<El['type'], string> = {
   line: 'Line',
   swatch: 'Colour',
   file: 'File',
+  sketch: 'Sketch',
+  table: 'Table',
+  document: 'Document',
+  comment: 'Comment',
+  label: 'Label',
 };
 
 function close() {
@@ -25,39 +52,72 @@ function boardTitle(id: string) {
     .join(' / ');
 }
 
+// ---------------------------------------------------------------- recently viewed boards
+
+const VIEWED_KEY = 'cn:viewed';
+export function lastViewed(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+export function markViewed(boardId: string) {
+  try {
+    const v = lastViewed();
+    v[boardId] = Date.now();
+    localStorage.setItem(VIEWED_KEY, JSON.stringify(v));
+  } catch {}
+}
+
 // ---------------------------------------------------------------- search
+
+type Sort = 'relevance' | 'modified' | 'viewed';
 
 export function SearchPalette() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [sort, setSort] = useState<Sort>('relevance');
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const elements = useStore((s) => s.elements);
+  const labels = useLabels();
 
   useEffect(() => inputRef.current?.focus(), []);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const live = Object.values(elements).filter((el) => el.section === 'canvas' && el.type !== 'line' && isLive(el, elements));
-    if (!q) {
+    const viewed = lastViewed();
+    const live = Object.values(elements).filter(
+      (el) => el.section === 'canvas' && el.type !== 'line' && el.type !== 'label' && isLive(el, elements) && (!labelFilter || el.labels?.includes(labelFilter)),
+    );
+    const sorter = (a: { el: El; score: number }, b: { el: El; score: number }) =>
+      sort === 'modified'
+        ? b.el.updatedAt - a.el.updatedAt
+        : sort === 'viewed'
+          ? (viewed[b.el.type === 'board' ? b.el.id : b.el.parentId] ?? 0) - (viewed[a.el.type === 'board' ? a.el.id : a.el.parentId] ?? 0)
+          : b.score - a.score;
+    if (!q && !labelFilter) {
+      // Recent boards, by when they were last opened.
       return live
         .filter((el) => el.type === 'board')
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, 12)
-        .map((el) => ({ el, text: plainText(el), score: 0 }));
+        .map((el) => ({ el, text: plainText(el), score: viewed[el.id] ?? 0 }))
+        .sort((a, b) => b.score - a.score || b.el.updatedAt - a.el.updatedAt)
+        .slice(0, 12);
     }
-    const terms = q.split(/\s+/);
+    const terms = q.split(/\s+/).filter(Boolean);
     return live
       .map((el) => {
-        const text = plainText(el);
+        const text = plainText(el) + ' ' + (el.caption ?? '');
         const lower = text.toLowerCase();
         if (!terms.every((t) => lower.includes(t))) return null;
-        const score = (el.type === 'board' ? 3 : 0) + (lower.startsWith(terms[0]) ? 2 : 0) + el.updatedAt / 1e13;
+        const score = (el.type === 'board' ? 3 : 0) + (terms[0] && lower.startsWith(terms[0]) ? 2 : 0) + el.updatedAt / 1e13;
         return { el, text, score };
       })
       .filter((r): r is { el: El; text: string; score: number } => !!r)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 50);
-  }, [query, elements]);
+      .sort(sorter)
+      .slice(0, 80);
+  }, [query, elements, sort, labelFilter]);
 
   const open = (el: El) => {
     close();
@@ -72,7 +132,7 @@ export function SearchPalette() {
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="Search notes, boards, to-dos, links…"
+          placeholder="Search notes, boards, to-dos, links, tables…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -89,7 +149,32 @@ export function SearchPalette() {
             } else if (e.key === 'Enter' && results[active]) open(results[active].el);
           }}
         />
-        <div className="palette-hint">{query.trim() ? `${results.length} result${results.length === 1 ? '' : 's'}` : 'Recent boards'}</div>
+        <div className="palette-filters">
+          <span className="palette-hint">
+            {query.trim() || labelFilter ? `${results.length} match${results.length === 1 ? '' : 'es'}` : 'Recently viewed boards'}
+          </span>
+          <label>
+            Sort by:{' '}
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+              <option value="relevance">Relevance</option>
+              <option value="modified">Last modified</option>
+              <option value="viewed">Last viewed</option>
+            </select>
+          </label>
+          {labels.length > 0 && (
+            <label>
+              Label:{' '}
+              <select value={labelFilter ?? ''} onChange={(e) => setLabelFilter(e.target.value || null)}>
+                <option value="">Any</option>
+                {labels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.content.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         <ul className="palette-results scrollable">
           {results.map((r, i) => (
             <li key={r.el.id}>
@@ -97,12 +182,24 @@ export function SearchPalette() {
                 <span className={`type-pill type-${r.el.type}`}>{TYPE_LABEL[r.el.type]}</span>
                 <span className="result-text">
                   <Highlight text={snippet(r.text, query)} query={query} />
+                  {r.el.labels?.length ? (
+                    <span className="result-labels">
+                      {r.el.labels.map((id) => {
+                        const l = elements[id];
+                        return l?.type === 'label' ? (
+                          <span key={id} className="label-chip small" style={{ background: l.content.color }}>
+                            {l.content.name}
+                          </span>
+                        ) : null;
+                      })}
+                    </span>
+                  ) : null}
                 </span>
-                <span className="result-where">{boardTitle(r.el.parentId)}</span>
+                <span className="result-where">{r.el.type === 'board' && !query.trim() ? 'Board' : boardTitle(r.el.parentId)}</span>
               </button>
             </li>
           ))}
-          {query.trim() && results.length === 0 && <li className="palette-empty">Nothing matches “{query}”.</li>}
+          {(query.trim() || labelFilter) && results.length === 0 && <li className="palette-empty">No results found for “{query}”. Try adjusting your search.</li>}
         </ul>
       </div>
     </div>
@@ -133,7 +230,11 @@ function snippet(text: string, query: string) {
 }
 
 function Highlight({ text, query }: { text: string; query: string }) {
-  const terms = query.trim().split(/\s+/).filter(Boolean).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   if (!terms.length) return <>{text}</>;
   const parts = text.split(new RegExp(`(${terms.join('|')})`, 'gi'));
   return <>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</>;
@@ -171,13 +272,7 @@ export function TrashPanel() {
               </div>
             </div>
             <div className="trash-actions">
-              <button
-                onClick={() => {
-                  restoreElement(el.id);
-                }}
-              >
-                Restore
-              </button>
+              <button onClick={() => restoreElement(el.id)}>Restore</button>
               <button className="danger" onClick={() => deleteForever([el.id])}>
                 Delete
               </button>
@@ -189,7 +284,7 @@ export function TrashPanel() {
         <div className="side-foot">
           {confirming ? (
             <>
-              <span>Delete {trashed.length} items forever?</span>
+              <span>This will permanently delete all boards and cards in the trash.</span>
               <button
                 className="danger solid"
                 onClick={() => {
@@ -197,7 +292,7 @@ export function TrashPanel() {
                   setConfirming(false);
                 }}
               >
-                Delete all
+                Continue
               </button>
               <button onClick={() => setConfirming(false)}>Cancel</button>
             </>
@@ -212,7 +307,7 @@ export function TrashPanel() {
   );
 }
 
-function timeAgo(t: number) {
+export function timeAgo(t: number) {
   const s = Math.round((Date.now() - t) / 1000);
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
@@ -220,48 +315,518 @@ function timeAgo(t: number) {
   return new Date(t).toLocaleDateString();
 }
 
+// ---------------------------------------------------------------- unsorted (inbox)
+
+export function InboxPanel() {
+  const boardId = useStore((s) => s.boardId);
+  const key = useStore((s) =>
+    Object.values(s.elements)
+      .filter((e) => e.section === 'inbox' && e.parentId === s.boardId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((e) => e.id)
+      .join(','),
+  );
+  const ids = key ? key.split(',') : [];
+  const [ghost, setGhost] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const text = draft.trim();
+    if (!text) return;
+    const html = text
+      .split('\n')
+      .map((l) => `<p>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`)
+      .join('');
+    addElements([makeElement('note', { section: 'inbox', content: { html } })], { select: false });
+    setDraft('');
+  };
+
+  // Drag a card out of the panel onto the board.
+  const onPointerDown = (e: RPointerEvent, id: string) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 5) return;
+      moved = true;
+      setGhost({ id, x: ev.clientX, y: ev.clientY });
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setGhost(null);
+      if (!moved || !isOverCanvas(ev.clientX, ev.clientY)) return;
+      const p = screenToWorld(ev.clientX, ev.clientY);
+      const el = getState().elements[id];
+      if (!el) return;
+      const column = columnAt(p);
+      patchElement(id, {
+        section: 'canvas',
+        x: Math.round(p.x - 40),
+        y: Math.round(p.y - 20),
+        columnId: column?.id ?? null,
+        order: column ? Date.now() : el.order,
+        z: Math.max(0, ...Object.values(getState().elements).filter((x) => x.parentId === boardId).map((x) => x.z)) + 1,
+      });
+      setState({ selection: [id] });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <aside className="side-panel inbox-panel" aria-label="Unsorted">
+      <div className="side-head">
+        <h2>Unsorted</h2>
+        <button className="icon-btn" onClick={close} title="Close">
+          ✕
+        </button>
+      </div>
+      <p className="side-sub">
+        A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> to send selected cards here.
+      </p>
+      <div className="inbox-list scrollable">
+        {ids.length === 0 && <div className="trash-empty">Nothing unsorted on this board.</div>}
+        {ids.map((id) => (
+          <InboxCard key={id} id={id} onPointerDown={onPointerDown} dragging={ghost?.id === id} />
+        ))}
+      </div>
+      <div className="side-foot quick-add">
+        <textarea
+          value={draft}
+          rows={2}
+          placeholder="Quick note… (Enter to add)"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button onClick={add} disabled={!draft.trim()}>
+          Add
+        </button>
+      </div>
+      {ghost && (
+        <div className="tool-ghost" style={{ left: ghost.x, top: ghost.y }}>
+          {TYPE_LABEL[getState().elements[ghost.id]?.type ?? 'note']}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function InboxCard({ id, onPointerDown, dragging }: { id: string; onPointerDown(e: RPointerEvent, id: string): void; dragging: boolean }) {
+  const el = useStore((s) => s.elements[id]);
+  if (!el) return null;
+  return (
+    <div className={`inbox-card item item-${el.type} in-column ${dragging ? 'drag-source' : ''}`} onPointerDown={(e) => onPointerDown(e, id)}>
+      <ElementBody el={el} editing={false} selected={false} />
+      <div className="inbox-actions">
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => {
+            const r = canvasRect();
+            const p = screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2);
+            patchElement(id, { section: 'canvas', x: Math.round(p.x - 130), y: Math.round(p.y - 60), columnId: null });
+          }}
+        >
+          Add to board
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- export
+
+export function ExportPanel() {
+  const boardId = useStore((s) => s.boardId);
+  const [subBoards, setSubBoards] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const title = boardPath(boardId).slice(-1)[0].title;
+  const run = async (label: string, fn: () => Promise<void> | void) => {
+    setBusy(label);
+    try {
+      await fn();
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <aside className="side-panel" aria-label="Export">
+      <div className="side-head">
+        <h2>Export board</h2>
+        <button className="icon-btn" onClick={close} title="Close">
+          ✕
+        </button>
+      </div>
+      <p className="side-sub">“{title}”</p>
+      <div className="export-section">
+        <h3>Export the current board layout</h3>
+        <button disabled={!!busy} onClick={() => run('png', () => exportBoardPng(boardId, 2))}>
+          {busy === 'png' ? 'Generating…' : 'PNG image'}
+        </button>
+        <button disabled={!!busy} onClick={() => run('pdf', () => exportBoardPng(boardId, 2, true))}>
+          {busy === 'pdf' ? 'Generating…' : 'PDF (print)'}
+        </button>
+      </div>
+      <div className="export-section">
+        <h3>Convert to a linear document</h3>
+        <label className="check">
+          <input type="checkbox" checked={subBoards} onChange={(e) => setSubBoards(e.target.checked)} /> Include sub-boards
+        </label>
+        <button onClick={() => exportBoardMarkdown(boardId, subBoards)}>Markdown</button>
+        <button onClick={() => exportBoardText(boardId, subBoards)}>Plain text</button>
+        <button onClick={() => exportBoardWord(boardId, subBoards)}>Word document</button>
+      </div>
+      <div className="export-section">
+        <h3>Download all images and files</h3>
+        <a className="button-like" href={`/api/board-files/${boardId}`} download>
+          Generate ZIP file
+        </a>
+      </div>
+      <div className="export-section">
+        <h3>Link</h3>
+        <button onClick={() => copyText(boardUrl(boardId), 'Board link copied')}>Copy a link to this board</button>
+      </div>
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------- templates
+
+export function TemplatesPanel() {
+  const boardId = useStore((s) => s.boardId);
+  const key = useStore((s) =>
+    Object.values(s.elements)
+      .filter((e) => e.parentId === TEMPLATES_PARENT && e.type === 'board' && e.section === 'canvas')
+      .map((e) => `${e.id}:${e.updatedAt}`)
+      .join(','),
+  );
+  const templates = key ? key.split(',').map((k) => getState().elements[k.split(':')[0]] as ElementOf<'board'>) : [];
+  const [query, setQuery] = useState('');
+  const [keepContent, setKeepContent] = useState(true);
+  const shown = templates.filter((t) => t.content.title.toLowerCase().includes(query.toLowerCase()));
+
+  const use = (template: ElementOf<'board'> | null) => {
+    const r = canvasRect();
+    const p = screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2);
+    if (!template) {
+      const board = makeElement('board', { x: Math.round(p.x - 55), y: Math.round(p.y - 50) });
+      addElements([board], { edit: true });
+      close();
+      return;
+    }
+    const board = cloneTemplate(template, boardId, keepContent);
+    board.x = Math.round(p.x - 55);
+    board.y = Math.round(p.y - 50);
+    close();
+    setState({ selection: [board.id] });
+  };
+
+  return (
+    <aside className="side-panel" aria-label="Templates">
+      <div className="side-head">
+        <h2>Choose a template</h2>
+        <button className="icon-btn" onClick={close} title="Close">
+          ✕
+        </button>
+      </div>
+      <input className="palette-input" placeholder="Search templates..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <ul className="trash-list scrollable">
+        <li>
+          <button className="template-row" onClick={() => use(null)}>
+            <span className="board-icon small">▦</span> Empty board
+          </button>
+        </li>
+        {shown.length === 0 && (
+          <li className="trash-empty">{templates.length ? 'No templates found' : 'Right-click any board and choose “Convert to Template” to make your own.'}</li>
+        )}
+        {shown.map((t) => (
+          <li key={t.id}>
+            <div className="template-line">
+              <button className="template-row" onClick={() => use(t)}>
+                <span className="board-icon small">{t.content.icon || '▦'}</span> {t.content.title || 'Untitled template'}
+                <span className="label-usage">{dependents(t.id).length} cards</span>
+              </button>
+              <button className="icon-btn small" title="Revert template to board" onClick={() => revertTemplate(t.id, boardId)}>
+                ↩
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="side-foot">
+        <label className="check">
+          <input type="checkbox" checked={keepContent} onChange={(e) => setKeepContent(e.target.checked)} /> Keep example content
+        </label>
+      </div>
+    </aside>
+  );
+}
+
+// Copies a template board (and everything in it) into `boardId`, returning the new board.
+function cloneTemplate(template: ElementOf<'board'>, boardId: string, keepContent: boolean): ElementOf<'board'> {
+  const { elements } = getState();
+  const ids = [template.id, ...dependents(template.id)];
+  const idMap = new Map(ids.map((id) => [id, uid()]));
+  const now = Date.now();
+  const copies: El[] = [];
+  for (const id of ids) {
+    const el = elements[id];
+    if (!el || el.section !== 'canvas') continue;
+    const copy = structuredClone(el) as El;
+    copy.id = idMap.get(id)!;
+    copy.parentId = id === template.id ? boardId : idMap.get(el.parentId) ?? el.parentId;
+    copy.columnId = el.columnId ? idMap.get(el.columnId) ?? null : null;
+    copy.createdAt = copy.updatedAt = now;
+    if (copy.type === 'board' && id === template.id) copy.content = { ...copy.content, template: false };
+    if (copy.type === 'line') {
+      const c = copy.content;
+      copy.content = { ...c, from: { ...c.from, id: c.from.id ? idMap.get(c.from.id) ?? null : null }, to: { ...c.to, id: c.to.id ? idMap.get(c.to.id) ?? null : null } };
+    }
+    if (!keepContent && id !== template.id) {
+      if (copy.type === 'note') copy.content = { html: '' };
+      if (copy.type === 'todo') copy.content = { ...copy.content, items: copy.content.items.map((i) => ({ ...i, text: '', done: false })) };
+    }
+    copies.push(copy);
+  }
+  addElements(copies, { select: false });
+  return copies.find((c) => c.id === idMap.get(template.id)) as ElementOf<'board'>;
+}
+
+export function convertToTemplate(id: string) {
+  const el = getState().elements[id];
+  if (el?.type !== 'board') return;
+  commit({ [id]: { ...el, parentId: TEMPLATES_PARENT, columnId: null, content: { ...el.content, template: true }, updatedAt: Date.now() } });
+  setState({ selection: [] });
+}
+
+function revertTemplate(id: string, boardId: string) {
+  const el = getState().elements[id];
+  if (el?.type !== 'board') return;
+  const r = allRects();
+  const box = r.size ? union([...r.values()]) : { x: 0, y: 0, w: 0, h: 0 };
+  commit({ [id]: { ...el, parentId: boardId, x: Math.round(box.x + box.w + 60), y: Math.round(box.y), content: { ...el.content, template: false }, updatedAt: Date.now() } });
+}
+
+// ---------------------------------------------------------------- settings
+
+export function SettingsPanel() {
+  const boardId = useStore((s) => s.boardId);
+  const theme = useStore((s) => s.theme);
+  const board = useStore((s) => s.elements[boardId]);
+  const [prefs, setPrefs] = useState(getToolbarPrefs());
+  const [scale, setScale] = useState(() => Number(localStorage.getItem('cn:ui-scale') || 1));
+  const appearance = board?.type === 'board' ? board.content : { background: null, hideGrid: false };
+
+  const setBoard = (patch: { background?: string | null; hideGrid?: boolean }) => {
+    const existing = getState().elements[boardId];
+    if (existing?.type === 'board') {
+      patchElement(boardId, { content: patch });
+    } else if (boardId === ROOT_ID) {
+      // Home isn't an element, so its appearance lives on a hidden 'root' board element.
+      const root = makeElement('board', { id: ROOT_ID, parentId: SYSTEM_PARENT, content: { title: 'Home', ...patch } });
+      addElements([root], { select: false });
+    }
+  };
+
+  const applyScale = (v: number) => {
+    setScale(v);
+    try {
+      localStorage.setItem('cn:ui-scale', String(v));
+    } catch {}
+    document.documentElement.style.setProperty('--ui-scale', String(v));
+  };
+
+  return (
+    <aside className="side-panel" aria-label="Settings">
+      <div className="side-head">
+        <h2>Settings</h2>
+        <button className="icon-btn" onClick={close} title="Close">
+          ✕
+        </button>
+      </div>
+      <div className="export-section">
+        <h3>Appearance</h3>
+        <div className="menu-row">
+          {(['system', 'light', 'dark'] as const).map((t) => (
+            <button key={t} className={theme === t ? 'active' : ''} onClick={() => setTheme(t)}>
+              {t === 'system' ? 'Match system' : t === 'light' ? 'Light' : 'Dark'}
+            </button>
+          ))}
+        </div>
+        <label className="check">
+          Interface size
+          <input type="range" min="0.8" max="1.4" step="0.1" value={scale} onChange={(e) => applyScale(Number(e.target.value))} />
+          <span>{Math.round(scale * 100)}%</span>
+        </label>
+      </div>
+      <div className="export-section">
+        <h3>This board’s background</h3>
+        <div className="menu-colors">
+          {[null, '#f6f1e7', '#e8eef5', '#eaf3ea', '#f5e9ee', '#ece8f6', '#2b2d31', '#16324f'].map((c) => (
+            <button
+              key={c ?? 'default'}
+              className={`swatch-dot ${c ? '' : 'no-color'} ${(appearance.background ?? null) === c ? 'active' : ''}`}
+              style={c ? { background: c } : undefined}
+              title={c ?? 'Revert to default'}
+              onClick={() => setBoard({ background: c })}
+            />
+          ))}
+          <input type="color" value={appearance.background || '#eeece8'} onChange={(e) => setBoard({ background: e.target.value })} title="Choose custom colour" />
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={!appearance.hideGrid} onChange={(e) => setBoard({ hideGrid: !e.target.checked })} /> Show dot grid
+        </label>
+      </div>
+      <div className="export-section">
+        <h3>Toolbar</h3>
+        <p className="side-sub">Choose which tools appear in the left toolbar.</p>
+        <div className="toolbar-prefs">
+          {ALL_TOOL_IDS.map((id) => (
+            <label key={id} className="check">
+              <input
+                type="checkbox"
+                checked={!prefs.hidden.includes(id)}
+                onChange={(e) => {
+                  const hidden = e.target.checked ? prefs.hidden.filter((h) => h !== id) : [...prefs.hidden, id];
+                  setPrefs({ hidden });
+                  setToolbarPrefs({ hidden });
+                }}
+              />
+              {TOOL_LABELS[id]}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="export-section">
+        <h3>Labels</h3>
+        <button onClick={() => setState({ modal: { kind: 'labels', ids: [] } })}>Manage labels…</button>
+      </div>
+    </aside>
+  );
+}
+
 // ---------------------------------------------------------------- shortcuts
 
-const SHORTCUTS: [string, string][] = [
-  ['Double-click the board', 'New note'],
-  ['Click a selected card / Enter', 'Edit it'],
-  ['Double-click a board card', 'Open board'],
-  ['Space + drag, middle-drag, or scroll', 'Move around'],
-  ['Ctrl + scroll, Ctrl + / Ctrl −', 'Zoom'],
-  ['Shift 1 / Ctrl 0', 'Fit everything / 100%'],
-  ['Drag on empty space', 'Select several cards'],
-  ['Shift + click', 'Add to selection'],
-  ['Ctrl A', 'Select all'],
-  ['Ctrl D', 'Duplicate'],
-  ['Ctrl C / Ctrl V', 'Copy / paste cards, text, links, images'],
-  ['Delete / Backspace', 'Move to Trash'],
-  ['Arrow keys (Shift for 10×)', 'Nudge selection'],
-  ['Ctrl Z / Ctrl Shift Z', 'Undo / redo'],
-  ['Ctrl K', 'Search everything'],
-  ['L', 'Line tool'],
-  ['Esc', 'Stop editing, clear selection'],
-  ['Backspace on the board', 'Go up a level when nothing is selected'],
-  ['In a note: # ## * 1. [] > ``` ---', 'Heading, list, checklist, quote, code, divider'],
+const SHORTCUT_SECTIONS: [string, [string, string][]][] = [
+  [
+    'The basics',
+    [
+      ['Double-click the board', 'New note'],
+      ['Click a selected card / Enter', 'Edit it'],
+      ['Esc', 'Deselect / stop editing'],
+      ['Shift + click, or drag on empty space', 'Multi-select'],
+      ['Ctrl A', 'Select all'],
+      ['Ctrl D', 'Duplicate'],
+      ['Ctrl C / Ctrl X / Ctrl V', 'Copy / cut / paste (cards, text, links, images)'],
+      ['Ctrl Alt C / Ctrl Alt V', 'Copy / paste styles'],
+      ['Delete / Backspace', 'Move to Trash'],
+      ['U', 'Move to Unsorted'],
+      ['Arrow keys (Shift for 10×)', 'Nudge an object'],
+      ['Ctrl ] / Ctrl [', 'Bring forward / send back'],
+      ['Ctrl Z / Ctrl Shift Z', 'Undo / redo'],
+      ['L', 'Line tool'],
+      ['D', 'New sketch'],
+    ],
+  ],
+  [
+    'Navigation',
+    [
+      ['Ctrl K', 'Search'],
+      ['Ctrl E', 'View recent boards'],
+      ['Backspace (nothing selected)', 'Go to parent board'],
+      ['Alt ← / Alt →', 'Go back / forward'],
+      ['Ctrl + double-click a board', 'Open board in new tab'],
+      ['Space + drag, middle-drag, or scroll', 'Move around the board'],
+      ['Ctrl Shift P', 'Presentation mode'],
+    ],
+  ],
+  [
+    'Zoom',
+    [
+      ['Ctrl + scroll, Ctrl + / Ctrl −', 'Zoom in / out'],
+      ['Ctrl 0', 'Reset to 100%'],
+      ['Shift 1', 'Scale to fit'],
+    ],
+  ],
+  [
+    'Appearance',
+    [
+      ['Ctrl Shift D', 'Toggle dark mode'],
+      ['Ctrl Shift = / Ctrl Shift −', 'Larger / smaller interface'],
+    ],
+  ],
+  [
+    'Text formatting',
+    [
+      ['Ctrl B / Ctrl I / Ctrl U', 'Bold / italic / underline'],
+      ['Ctrl Shift S', 'Strikethrough'],
+      ['Ctrl Shift H', 'Highlight'],
+      ['Ctrl K (while editing)', 'Hyperlink'],
+      ['Tab / Shift Tab', 'Indent / un-indent'],
+    ],
+  ],
+  [
+    'Markdown (at the start of a new line)',
+    [
+      ['# space / ## space', 'Large / normal heading'],
+      ['* space / 1. space', 'Bullet / numbered list'],
+      ['[] space', 'Checkbox'],
+      ['> space', 'Quote'],
+      ['! space', 'Callout'],
+      ['``` space', 'Code block'],
+      ['---', 'Horizontal divider line'],
+    ],
+  ],
+  [
+    'To-do lists',
+    [
+      ['Enter', 'New task'],
+      ['Tab / Shift Tab', 'Indent / un-indent a task'],
+      ['📅 while editing', 'Add a due date'],
+    ],
+  ],
+  [
+    'Drawing',
+    [
+      ['P / E', 'Pen / eraser'],
+      ['[ / ]', 'Change pen size'],
+      ['X', 'Change to previous colour'],
+      ['Esc or Ctrl S', 'Save current drawing'],
+    ],
+  ],
 ];
 
 export function ShortcutsPanel() {
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="dialog" role="dialog" aria-label="Keyboard shortcuts">
+      <div className="dialog shortcuts-dialog" role="dialog" aria-label="Keyboard shortcuts">
         <div className="side-head">
           <h2>Shortcuts</h2>
           <button className="icon-btn" onClick={close} title="Close">
             ✕
           </button>
         </div>
-        <dl className="shortcut-list">
-          {SHORTCUTS.map(([k, v]) => (
-            <div key={k}>
-              <dt>{k}</dt>
-              <dd>{v}</dd>
-            </div>
+        <div className="shortcut-sections scrollable">
+          {SHORTCUT_SECTIONS.map(([title, rows]) => (
+            <section key={title}>
+              <h3>{title}</h3>
+              <dl className="shortcut-list">
+                {rows.map(([k, v]) => (
+                  <div key={k}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           ))}
-        </dl>
+        </div>
       </div>
     </div>
   );
@@ -284,6 +849,4 @@ export function Toast() {
   );
 }
 
-export function isPanelOpen() {
-  return getState().panel !== null;
-}
+export const HIDDEN_PARENTS = new Set([LABELS_PARENT, TEMPLATES_PARENT, SYSTEM_PARENT]);

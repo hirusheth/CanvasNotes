@@ -4,10 +4,14 @@ import {
   commit,
   getState,
   load,
+  makeElement,
+  addElements,
+  maxZ,
   navigate,
   patchElements,
   redo,
   setState,
+  setTheme,
   startEditing,
   trashElements,
   undo,
@@ -17,7 +21,9 @@ import {
 import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
-import { SearchPalette, ShortcutsPanel, Toast, TrashPanel } from './components/Panels';
+import { ExportPanel, InboxPanel, SearchPalette, SettingsPanel, ShortcutsPanel, TemplatesPanel, Toast, TrashPanel, markViewed } from './components/Panels';
+import { ModalHost } from './components/Modals';
+import { Presentation } from './components/Presentation';
 import {
   addFiles,
   addLink,
@@ -25,13 +31,17 @@ import {
   clipboardTextIsInternal,
   columnAt,
   copySelection,
+  copyStyle,
   duplicate,
   isBlank,
   isUrl,
+  moveToInbox,
   pasteInternal,
+  pasteStyle,
   centerPlacement,
   fetchLinkPreview,
 } from './actions';
+import { openDrawing } from './elements/Sketch';
 import { allRects, fitRects, getViewport, setViewport, zoomAt } from './viewport';
 import type { El } from './types';
 
@@ -68,24 +78,65 @@ subscribeState(() => {
   if (prev && isBlank(prev)) commit({ [prev.id]: null }, { history: false });
 });
 
+function setUiScale(delta: number) {
+  const current = Number(localStorage.getItem('cn:ui-scale') || 1);
+  const next = Math.round(Math.min(1.4, Math.max(0.8, current + delta)) * 10) / 10;
+  try {
+    localStorage.setItem('cn:ui-scale', String(next));
+  } catch {}
+  document.documentElement.style.setProperty('--ui-scale', String(next));
+}
+
 function onKeyDown(e: KeyboardEvent) {
   const state = getState();
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
 
-  if (mod && key === 'k') {
+  if (state.modal) return; // modals handle their own keys
+  if (mod && key === 'k' && !isTyping(e.target)) {
     e.preventDefault();
     setState({ panel: state.panel === 'search' ? null : 'search' });
     return;
   }
+  if (mod && key === 'e') {
+    e.preventDefault();
+    setState({ panel: 'search' });
+    return;
+  }
+  if (state.presenting) return; // presentation mode handles its own keys
   if (state.panel && e.key === 'Escape') {
     setState({ panel: null });
+    return;
+  }
+  if (mod && e.shiftKey && key === 'd') {
+    e.preventDefault();
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark');
+    return;
+  }
+  if (mod && e.shiftKey && (key === '+' || key === '=' || key === '_' || key === '-')) {
+    e.preventDefault();
+    setUiScale(key === '-' || key === '_' ? -0.1 : 0.1);
+    return;
+  }
+  if (mod && e.shiftKey && key === 'p') {
+    e.preventDefault();
+    setState({ presenting: true, selection: [], editingId: null, panel: null });
     return;
   }
   if (isTyping(e.target) || state.panel === 'search') return;
 
   const { selection, boardId } = state;
-  if (mod && key === 'z') {
+  if (e.altKey && e.key === 'ArrowLeft') {
+    history.back();
+  } else if (e.altKey && e.key === 'ArrowRight') {
+    history.forward();
+  } else if (mod && e.altKey && key === 'c') {
+    e.preventDefault();
+    copyStyle();
+  } else if (mod && e.altKey && key === 'v') {
+    e.preventDefault();
+    pasteStyle();
+  } else if (mod && key === 'z') {
     e.preventDefault();
     if (e.shiftKey) redo();
     else undo();
@@ -108,6 +159,11 @@ function onKeyDown(e: KeyboardEvent) {
       e.preventDefault();
       trashElements(selection);
     }
+  } else if (mod && (e.key === ']' || e.key === '[')) {
+    e.preventDefault();
+    const zs = Object.values(state.elements).filter((el) => el.parentId === boardId).map((el) => el.z);
+    let z = e.key === ']' ? maxZ() : Math.min(...zs) - selection.length - 1;
+    patchElements(Object.fromEntries(selection.map((id) => [id, { z: e.key === ']' ? ++z : ++z }])));
   } else if (mod && (key === '=' || key === '+')) {
     e.preventDefault();
     zoomAt(boardId, 1.2);
@@ -133,9 +189,19 @@ function onKeyDown(e: KeyboardEvent) {
     e.preventDefault();
     const el = state.elements[selection[0]];
     if (el?.type === 'board') navigate(el.id);
+    else if (el?.type === 'alias') navigate(el.content.boardId);
+    else if (el?.type === 'sketch') openDrawing(el.id);
+    else if (el?.type === 'document') setState({ modal: { kind: 'document', id: el.id } });
     else startEditing(selection[0]);
   } else if (key === 'l' && !mod) {
     setState({ tool: state.tool === 'line' ? null : 'line' });
+  } else if (key === 'u' && !mod && selection.length) {
+    moveToInbox(selection);
+  } else if (key === 'd' && !mod) {
+    const at = pastePlacement();
+    const sketch = makeElement('sketch', { x: Math.round(at.x), y: Math.round(at.y) });
+    addElements([sketch]);
+    openDrawing(sketch.id);
   } else if (e.key === '?') {
     setState({ panel: 'shortcuts' });
   } else if (e.key.startsWith('Arrow') && selection.length) {
@@ -146,14 +212,15 @@ function onKeyDown(e: KeyboardEvent) {
     const patches: Record<string, Partial<El>> = {};
     for (const id of selection) {
       const el = state.elements[id];
-      if (el && !el.columnId && el.type !== 'line') patches[id] = { x: el.x + dx, y: el.y + dy };
+      if (el && !el.columnId && el.type !== 'line' && !el.locked) patches[id] = { x: el.x + dx, y: el.y + dy };
     }
     patchElements(patches, { coalesce: 'nudge' });
   }
 }
 
 function onPaste(e: ClipboardEvent) {
-  if (isTyping(e.target) || getState().panel) return;
+  const state = getState();
+  if (isTyping(e.target) || state.panel || state.modal) return;
   const data = e.clipboardData;
   if (!data) return;
   const at = pastePlacement();
@@ -179,6 +246,7 @@ export function App() {
   const loadError = useStore((s) => s.loadError);
   const panel = useStore((s) => s.panel);
   const theme = useStore((s) => s.theme);
+  const presenting = useStore((s) => s.presenting);
   const boardId = useStore((s) => s.boardId);
   const boardTitle = useStore((s) => {
     const path = boardPath(s.boardId);
@@ -186,6 +254,7 @@ export function App() {
   });
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', localStorage.getItem('cn:ui-scale') || '1');
     void load().then(() => {
       // Finish link previews that were interrupted by a reload.
       for (const el of Object.values(getState().elements)) {
@@ -207,6 +276,7 @@ export function App() {
 
   useEffect(() => {
     document.title = boardId === 'root' ? 'Canvas Notes' : `${boardTitle} · Canvas Notes`;
+    markViewed(boardId);
   }, [boardId, boardTitle]);
 
   if (loadError) {
@@ -220,15 +290,21 @@ export function App() {
   }
 
   return (
-    <div className="app">
-      <TopBar />
+    <div className={`app ${presenting ? 'presenting' : ''}`}>
+      {!presenting && <TopBar />}
       <div className="main">
-        <Toolbar />
+        {!presenting && <Toolbar />}
         {loaded ? <Canvas key={boardId} /> : <div className="splash">Loading…</div>}
         {panel === 'trash' && <TrashPanel />}
+        {panel === 'inbox' && <InboxPanel />}
+        {panel === 'export' && <ExportPanel />}
+        {panel === 'templates' && <TemplatesPanel />}
+        {panel === 'settings' && <SettingsPanel />}
       </div>
+      {presenting && <Presentation />}
       {panel === 'search' && <SearchPalette />}
       {panel === 'shortcuts' && <ShortcutsPanel />}
+      <ModalHost />
       <Toast />
     </div>
   );

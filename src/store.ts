@@ -3,7 +3,13 @@ import * as api from './api';
 import { DEFAULT_WIDTH, ROOT_ID, type El, type ElementOf, type ElementType, type ContentByType } from './types';
 
 export type SaveStatus = 'saved' | 'saving' | 'error';
-export type Panel = null | 'search' | 'trash' | 'shortcuts';
+export type Panel = null | 'search' | 'trash' | 'shortcuts' | 'inbox' | 'export' | 'templates' | 'settings';
+export type Modal =
+  | { kind: 'draw'; id: string }
+  | { kind: 'document'; id: string }
+  | { kind: 'labels'; ids: string[] }
+  | { kind: 'icon'; id: string }
+  | { kind: 'boardLink'; onPick: (boardId: string, title: string) => void };
 export type Theme = 'system' | 'light' | 'dark';
 
 export interface State {
@@ -22,6 +28,9 @@ export interface State {
   // Asks the canvas to centre on an element once (e.g. from search).
   focusRequest: { id: string; nonce: number } | null;
   toast: { text: string; nonce: number } | null;
+  modal: Modal | null;
+  captionEditId: string | null;
+  presenting: boolean;
 }
 
 type Patch = Partial<Omit<El, 'content'>> & { content?: Partial<El['content']> };
@@ -61,6 +70,9 @@ let state: State = {
   canRedo: false,
   focusRequest: null,
   toast: null,
+  modal: null,
+  captionEditId: null,
+  presenting: false,
 };
 
 const listeners = new Set<() => void>();
@@ -298,7 +310,9 @@ export function boardPath(boardId: string): { id: string; title: string }[] {
 export function defaultContent<T extends ElementType>(type: T): ContentByType[T] {
   const defaults: { [K in ElementType]: ContentByType[K] } = {
     note: { html: '' },
+    heading: { text: '', size: 'large' },
     board: { title: '' },
+    alias: { boardId: '' },
     column: { title: '' },
     todo: { title: '', items: [{ id: uid(), text: '', done: false }] },
     image: { src: '' },
@@ -306,6 +320,19 @@ export function defaultContent<T extends ElementType>(type: T): ContentByType[T]
     line: { from: { x: 0, y: 0 }, to: { x: 160, y: 0 }, arrow: 'end' },
     swatch: { hex: '#f4c95d' },
     file: { src: '', name: '', size: 0, mime: '' },
+    sketch: { strokes: [], ratio: 0.66 },
+    table: {
+      title: '',
+      header: true,
+      cells: [
+        ['', '', ''],
+        ['', '', ''],
+        ['', '', ''],
+      ],
+    },
+    document: { title: '', html: '' },
+    comment: { comments: [] },
+    label: { name: '', color: '#3a8fd9' },
   };
   return defaults[type];
 }

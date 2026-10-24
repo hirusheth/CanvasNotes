@@ -2,11 +2,32 @@
 // board it belongs to (parentId), a section (canvas or trash) and either a
 // free canvas position or an order inside a column.
 
-export type ElementType = 'note' | 'board' | 'column' | 'todo' | 'image' | 'link' | 'line' | 'swatch' | 'file';
+export type ElementType =
+  | 'note'
+  | 'heading'
+  | 'board'
+  | 'alias'
+  | 'column'
+  | 'todo'
+  | 'image'
+  | 'link'
+  | 'line'
+  | 'swatch'
+  | 'file'
+  | 'sketch'
+  | 'table'
+  | 'document'
+  | 'comment'
+  | 'label';
 
-export type Section = 'canvas' | 'trash';
+// canvas: on the board · inbox: the board's "Unsorted" panel · trash: removed.
+export type Section = 'canvas' | 'inbox' | 'trash';
 
 export const ROOT_ID = 'root';
+// Pseudo-parents for elements that never appear on a board.
+export const LABELS_PARENT = '__labels';
+export const TEMPLATES_PARENT = '__templates';
+export const SYSTEM_PARENT = '__system';
 
 export interface NoteContent {
   html: string;
@@ -14,6 +35,18 @@ export interface NoteContent {
 export interface BoardContent {
   title: string;
   icon?: string;
+  iconImage?: string | null;
+  // Board appearance (also stored on the hidden 'root' element for Home).
+  background?: string | null;
+  hideGrid?: boolean;
+  template?: boolean;
+}
+export interface AliasContent {
+  boardId: string;
+}
+export interface HeadingContent {
+  text: string;
+  size?: 'large' | 'medium' | 'small';
 }
 export interface ColumnContent {
   title: string;
@@ -23,15 +56,23 @@ export interface TodoItem {
   id: string;
   text: string;
   done: boolean;
+  due?: string | null;
+  indent?: number;
 }
 export interface TodoContent {
   title: string;
   items: TodoItem[];
 }
+export interface Stroke {
+  color: string;
+  width: number;
+  points: number[];
+}
 export interface ImageContent {
   src: string;
   caption?: string;
   ratio?: number;
+  annotation?: Stroke[];
 }
 export interface LinkContent {
   url: string;
@@ -40,6 +81,7 @@ export interface LinkContent {
   image?: string | null;
   site?: string | null;
   loading?: boolean;
+  kind?: 'video' | 'audio' | 'map' | null;
 }
 export interface LineEnd {
   id?: string | null;
@@ -52,6 +94,7 @@ export interface LineContent {
   label?: string;
   arrow: 'end' | 'both' | 'none';
   dashed?: boolean;
+  weight?: number;
 }
 export interface SwatchContent {
   hex: string;
@@ -63,10 +106,47 @@ export interface FileContent {
   size: number;
   mime: string;
 }
+export interface SketchContent {
+  strokes: Stroke[];
+  ratio: number;
+}
+export type CellType = 'auto' | 'text' | 'number' | 'currency' | 'percentage' | 'checkbox' | 'date';
+export interface CellStyle {
+  type?: CellType;
+  align?: 'left' | 'center' | 'right';
+  bg?: string | null;
+  bold?: boolean;
+}
+export interface TableContent {
+  title: string;
+  cells: string[][];
+  styles?: Record<string, CellStyle>;
+  colWidths?: number[];
+  header?: boolean;
+}
+export interface DocumentContent {
+  title: string;
+  html: string;
+}
+export interface CommentEntry {
+  id: string;
+  text: string;
+  at: number;
+  editedAt?: number;
+}
+export interface CommentContent {
+  comments: CommentEntry[];
+}
+export interface LabelContent {
+  name: string;
+  color: string;
+}
 
 export interface ContentByType {
   note: NoteContent;
+  heading: HeadingContent;
   board: BoardContent;
+  alias: AliasContent;
   column: ColumnContent;
   todo: TodoContent;
   image: ImageContent;
@@ -74,6 +154,11 @@ export interface ContentByType {
   line: LineContent;
   swatch: SwatchContent;
   file: FileContent;
+  sketch: SketchContent;
+  table: TableContent;
+  document: DocumentContent;
+  comment: CommentContent;
+  label: LabelContent;
 }
 
 export interface ElementOf<T extends ElementType> {
@@ -88,6 +173,10 @@ export interface ElementOf<T extends ElementType> {
   w: number;
   z: number;
   color?: string | null;
+  // Free text shown under the card ("Add a description").
+  caption?: string | null;
+  labels?: string[];
+  locked?: boolean;
   content: ContentByType[T];
   createdAt: number;
   updatedAt: number;
@@ -111,7 +200,9 @@ export interface Viewport {
 
 export const DEFAULT_WIDTH: Record<ElementType, number> = {
   note: 270,
+  heading: 360,
   board: 110,
+  alias: 110,
   column: 300,
   todo: 270,
   image: 300,
@@ -119,10 +210,32 @@ export const DEFAULT_WIDTH: Record<ElementType, number> = {
   line: 0,
   swatch: 120,
   file: 270,
+  sketch: 300,
+  table: 420,
+  document: 270,
+  comment: 280,
+  label: 0,
 };
 
 // Types that may live inside a column.
-export const COLUMN_CHILD_TYPES: ElementType[] = ['note', 'board', 'todo', 'image', 'link', 'swatch', 'file'];
+export const COLUMN_CHILD_TYPES: ElementType[] = [
+  'note',
+  'heading',
+  'board',
+  'alias',
+  'todo',
+  'image',
+  'link',
+  'swatch',
+  'file',
+  'sketch',
+  'table',
+  'document',
+  'comment',
+];
+
+// Types that show a "description" line under the card, like Milanote.
+export const CAPTION_TYPES: ElementType[] = ['board', 'alias', 'link', 'file', 'swatch', 'sketch', 'table', 'document'];
 
 export const CARD_COLORS: { name: string; value: string | null }[] = [
   { name: 'Default', value: null },
@@ -135,3 +248,5 @@ export const CARD_COLORS: { name: string; value: string | null }[] = [
   { name: 'Sage', value: 'sage' },
   { name: 'Slate', value: 'slate' },
 ];
+
+export const LABEL_COLORS = ['#e0566f', '#f0803c', '#e0b100', '#2fae78', '#3a8fd9', '#8a6be0', '#67707e'];

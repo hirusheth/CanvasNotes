@@ -8,12 +8,13 @@ import {
   makeElement,
   maxZ,
   patchElement,
+  patchElements,
   setState,
   toast,
   uid,
   dependents,
 } from './store';
-import { COLUMN_CHILD_TYPES, type El, type ElementType } from './types';
+import { COLUMN_CHILD_TYPES, DEFAULT_WIDTH, type El, type ElementType } from './types';
 import { allRects, contains, viewCenter } from './viewport';
 
 export interface Placement {
@@ -67,12 +68,18 @@ export function columnIndexAt(columnId: string, y: number, exclude: string[] = [
   return index;
 }
 
-export function createElement(type: ElementType, at: Placement = centerPlacement()): El | null {
+export function createElement(type: ElementType, at: Placement = centerPlacement(), opts: { kind?: 'video' | 'audio' | 'map' } = {}): El | null {
   if (type === 'image' || type === 'file') {
     pickFiles(type === 'image' ? 'image/*' : '*/*', (files) => addFiles(files, at));
     return null;
   }
   const el = makeElement(type, place(type, at)) as El;
+  if (el.type === 'link' && opts.kind) el.content = { ...el.content, kind: opts.kind };
+  if (type === 'sketch' || type === 'document') {
+    addElements([el]);
+    setState({ modal: type === 'sketch' ? { kind: 'draw', id: el.id } : { kind: 'document', id: el.id } });
+    return el;
+  }
   if (type === 'line') {
     const line = el as Extract<El, { type: 'line' }>;
     line.content = { ...line.content, from: { x: at.x, y: at.y }, to: { x: at.x + 180, y: at.y } };
@@ -339,6 +346,22 @@ export function plainText(el: El): string {
       return el.content.name;
     case 'line':
       return el.content.label || '';
+    case 'heading':
+      return el.content.text;
+    case 'alias': {
+      const target = getState().elements[el.content.boardId];
+      return target?.type === 'board' ? target.content.title : '';
+    }
+    case 'sketch':
+      return el.caption || '';
+    case 'table':
+      return [el.content.title, ...el.content.cells.map((r) => r.join('\t'))].filter(Boolean).join('\n');
+    case 'document':
+      return [el.content.title, htmlToText(el.content.html)].filter(Boolean).join('\n');
+    case 'comment':
+      return el.content.comments.map((c) => c.text).join('\n');
+    case 'label':
+      return el.content.name;
   }
 }
 
@@ -347,5 +370,192 @@ export function isBlank(el: El) {
   if (el.type === 'note') return htmlToText(el.content.html) === '' && !/<(img|hr)/.test(el.content.html);
   if (el.type === 'todo') return !el.content.title.trim() && el.content.items.every((i) => !i.text.trim());
   if (el.type === 'link') return !el.content.url.trim();
+  if (el.type === 'heading') return !el.content.text.trim();
+  if (el.type === 'comment') return el.content.comments.length === 0;
   return false;
+}
+
+// ---------------------------------------------------------------- organising (context-menu actions)
+
+function topLevel(ids: string[]) {
+  const { elements } = getState();
+  return ids.map((id) => elements[id]).filter((el): el is El => !!el && !el.columnId && el.type !== 'line');
+}
+
+// "Group into Column": wraps the selected cards in a new column at their top-left.
+export function groupIntoColumn(ids = getState().selection) {
+  const cards = topLevel(ids).filter((el) => COLUMN_CHILD_TYPES.includes(el.type));
+  if (cards.length === 0) return;
+  const rects = allRects();
+  cards.sort((a, b) => (rects.get(a.id)?.y ?? a.y) - (rects.get(b.id)?.y ?? b.y) || a.x - b.x);
+  const column = makeElement('column', { x: Math.min(...cards.map((c) => c.x)) - 10, y: Math.min(...cards.map((c) => c.y)) - 50 });
+  const changes: Record<string, El> = { [column.id]: column };
+  cards.forEach((c, i) => (changes[c.id] = { ...c, columnId: column.id, order: i + 1, updatedAt: Date.now() } as El));
+  commit(changes);
+  setState({ selection: [column.id] });
+}
+
+// "Connect with Lines": chains the selected cards with arrows in reading order.
+export function connectWithLines(ids = getState().selection) {
+  const cards = topLevel(ids);
+  if (cards.length < 2) return toast('Select two or more cards to connect');
+  cards.sort((a, b) => a.x - b.x || a.y - b.y);
+  const lines = cards.slice(1).map((c, i) =>
+    makeElement('line', { content: { from: { id: cards[i].id, x: cards[i].x, y: cards[i].y }, to: { id: c.id, x: c.x, y: c.y }, arrow: 'end' } }),
+  );
+  addElements(lines);
+}
+
+export function alignSelection(mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom', ids = getState().selection) {
+  const rects = allRects();
+  const cards = topLevel(ids).filter((c) => rects.has(c.id) && !c.locked);
+  if (cards.length < 2) return;
+  const rs = cards.map((c) => rects.get(c.id)!);
+  const left = Math.min(...rs.map((r) => r.x));
+  const right = Math.max(...rs.map((r) => r.x + r.w));
+  const top = Math.min(...rs.map((r) => r.y));
+  const bottom = Math.max(...rs.map((r) => r.y + r.h));
+  const patches: Record<string, Partial<El>> = {};
+  cards.forEach((c, i) => {
+    const r = rs[i];
+    const x = mode === 'left' ? left : mode === 'right' ? right - r.w : mode === 'center' ? (left + right) / 2 - r.w / 2 : c.x;
+    const y = mode === 'top' ? top : mode === 'bottom' ? bottom - r.h : mode === 'middle' ? (top + bottom) / 2 - r.h / 2 : c.y;
+    patches[c.id] = { x: Math.round(x), y: Math.round(y) };
+  });
+  patchElements(patches);
+}
+
+export function distributeSelection(axis: 'horizontal' | 'vertical', ids = getState().selection) {
+  const rects = allRects();
+  const cards = topLevel(ids).filter((c) => rects.has(c.id) && !c.locked);
+  if (cards.length < 3) return toast('Select three or more cards to distribute');
+  const key = axis === 'horizontal' ? 'x' : 'y';
+  const size = axis === 'horizontal' ? 'w' : 'h';
+  cards.sort((a, b) => rects.get(a.id)![key] - rects.get(b.id)![key]);
+  const rs = cards.map((c) => rects.get(c.id)!);
+  const start = rs[0][key];
+  const end = rs[rs.length - 1][key] + rs[rs.length - 1][size];
+  const gap = (end - start - rs.reduce((s, r) => s + r[size], 0)) / (rs.length - 1);
+  let pos = start;
+  const patches: Record<string, Partial<El>> = {};
+  cards.forEach((c, i) => {
+    patches[c.id] = { [key]: Math.round(pos) } as Partial<El>;
+    pos += rs[i][size] + gap;
+  });
+  patchElements(patches);
+}
+
+export function setLocked(ids: string[], locked: boolean) {
+  patchElements(Object.fromEntries(ids.map((id) => [id, { locked }])));
+}
+
+let copiedStyle: { color: string | null } | null = null;
+export function copyStyle(id = getState().selection[0]) {
+  const el = getState().elements[id];
+  if (!el) return;
+  copiedStyle = { color: el.color ?? null };
+  toast('Style copied');
+}
+export function pasteStyle(ids = getState().selection) {
+  if (!copiedStyle) return toast('Copy a style first (Ctrl Alt C)');
+  patchElements(Object.fromEntries(ids.map((id) => [id, { color: copiedStyle!.color }])));
+}
+
+// Milanote's "Unsorted" panel: a per-board holding area.
+export function moveToInbox(ids = getState().selection) {
+  const { elements } = getState();
+  const patches: Record<string, Partial<El>> = {};
+  for (const id of ids) {
+    const el = elements[id];
+    if (el && el.type !== 'line' && el.section === 'canvas') patches[id] = { section: 'inbox', columnId: null };
+  }
+  patchElements(patches);
+  setState({ selection: [] });
+  const n = Object.keys(patches).length;
+  if (n) toast(`Moved ${n} item${n === 1 ? '' : 's'} to Unsorted`);
+}
+
+export function deleteCompletedTasks(id: string) {
+  const el = getState().elements[id];
+  if (el?.type !== 'todo') return;
+  patchElement(id, { content: { items: el.content.items.filter((i) => !i.done) } });
+}
+
+export function createShortcut(boardId: string) {
+  const board = getState().elements[boardId];
+  if (board?.type !== 'board') return;
+  const alias = makeElement('alias', { x: board.x + 140, y: board.y, content: { boardId } });
+  addElements([alias]);
+  toast('Shortcut created — drag it to any board');
+}
+
+export function duplicateLinkedBoard(aliasId: string) {
+  const alias = getState().elements[aliasId];
+  if (alias?.type !== 'alias') return;
+  const { boardId } = getState();
+  const target = getState().elements[alias.content.boardId];
+  if (!target) return;
+  const source = withDependents([target.id]);
+  const copies = cloneTree(source, new Set([target.id]), boardId, 0, 0);
+  const root = copies.find((c) => c.parentId === boardId && c.type === 'board')!;
+  root.x = alias.x + 140;
+  root.y = alias.y;
+  addElements(copies, { select: false });
+  setState({ selection: [root.id] });
+}
+
+export function boardUrl(boardId: string) {
+  return `${location.origin}${location.pathname}${boardId === 'root' ? '#/' : `#/b/${boardId}`}`;
+}
+
+export function copyText(text: string, message = 'Copied') {
+  void navigator.clipboard?.writeText(text).then(
+    () => toast(message),
+    () => toast("Couldn't copy"),
+  );
+}
+
+// "Convert to …": change a card's type while keeping its text.
+export function convertElement(id: string, to: 'note' | 'document' | 'board' | 'todo' | 'heading') {
+  const el = getState().elements[id];
+  if (!el || el.type === to) return;
+  const text = plainText(el);
+  const html = el.type === 'note' ? el.content.html : el.type === 'document' ? el.content.html : text.split('\n').map((l) => `<p>${escapeHtml(l)}</p>`).join('');
+  const firstLine = text.split('\n')[0]?.trim() ?? '';
+  let content: El['content'];
+  switch (to) {
+    case 'note':
+      content = { html: el.type === 'document' && el.content.title ? `<h2>${escapeHtml(el.content.title)}</h2>${html}` : html };
+      break;
+    case 'document':
+      content = { title: firstLine.slice(0, 80), html: el.type === 'note' ? el.content.html : html };
+      break;
+    case 'board':
+      content = { title: firstLine.slice(0, 80) || 'Untitled board' };
+      break;
+    case 'todo':
+      content = { title: '', items: text.split('\n').filter((l) => l.trim()).map((l) => ({ id: uid(), text: l.replace(/^\[[ x]\]\s*/, ''), done: /^\[x\]/.test(l) })) };
+      break;
+    case 'heading':
+      content = { text: firstLine, size: 'large' };
+      break;
+  }
+  commit({ [id]: { ...el, type: to, content, w: DEFAULT_WIDTH[to], updatedAt: Date.now() } as El });
+}
+
+export async function replaceImage(id: string) {
+  pickFiles('image/*', async ([file]) => {
+    const up = await api.upload(file);
+    const img = new Image();
+    img.src = up.url;
+    await img.decode().catch(() => {});
+    patchElement(id, { content: { src: up.url, ratio: img.naturalWidth ? img.naturalHeight / img.naturalWidth : undefined, annotation: [] } });
+  });
+}
+
+export function replacePreview(id: string) {
+  pickFiles('image/*', async ([file]) => {
+    const up = await api.upload(file);
+    patchElement(id, { content: { image: up.url } });
+  });
 }

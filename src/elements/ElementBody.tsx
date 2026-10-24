@@ -5,6 +5,11 @@ import { RichText } from './RichText';
 import { ItemFrame } from '../components/ItemFrame';
 import { useCanvas } from '../components/canvasContext';
 import { fetchLinkPreview, hostOf, isUrl } from '../actions';
+import { navigate } from '../store';
+import { SketchView, StrokesSvg } from './Sketch';
+import { TableBody } from './Table';
+import { AliasBody, CommentBody, DocumentBody, HeadingBody } from './MoreBodies';
+import { embedFor, LINK_PLACEHOLDERS } from '../embeds';
 
 interface BodyProps<T extends El['type']> {
   el: ElementOf<T>;
@@ -30,6 +35,22 @@ export const ElementBody = memo(function ElementBody({ el, editing, selected }: 
       return <SwatchBody el={el} editing={editing} selected={selected} />;
     case 'file':
       return <FileBody el={el} editing={editing} selected={selected} />;
+    case 'heading':
+      return <HeadingBody el={el} editing={editing} />;
+    case 'alias':
+      return <AliasBody el={el} />;
+    case 'sketch':
+      return (
+        <div className="card sketch-card">
+          <SketchView strokes={el.content.strokes} ratio={el.content.ratio} />
+        </div>
+      );
+    case 'table':
+      return <TableBody el={el} editing={editing} />;
+    case 'document':
+      return <DocumentBody el={el} />;
+    case 'comment':
+      return <CommentBody el={el} editing={editing} />;
     default:
       return null;
   }
@@ -60,9 +81,26 @@ function NoteBody({ el, editing }: BodyProps<'note'>) {
   }
   return (
     <div className="card note">
-      {el.content.html ? <div className="rich-text" dangerouslySetInnerHTML={{ __html: el.content.html }} /> : <div className="rich-text placeholder">Empty note</div>}
+      {el.content.html ? (
+        <div className="rich-text" onClick={openLinkInNote} dangerouslySetInnerHTML={{ __html: el.content.html }} />
+      ) : (
+        <div className="rich-text placeholder">Empty note</div>
+      )}
     </div>
   );
+}
+
+// Links inside a note work when it isn't being edited: board links navigate, web links open a tab.
+function openLinkInNote(e: React.MouseEvent) {
+  const a = (e.target as HTMLElement).closest('a');
+  if (!a) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const href = a.getAttribute('href') || '';
+  const board = href.match(/^#\/b\/([\w-]+)/);
+  if (board) navigate(board[1]);
+  else if (href === '#/') navigate('root');
+  else if (href) window.open(href, '_blank', 'noopener');
 }
 
 // ---------------------------------------------------------------- board
@@ -77,7 +115,9 @@ function BoardBody({ el, editing }: BodyProps<'board'>) {
   return (
     <div className="board-card">
       <div className="board-tile">
-        <span className="board-icon">{el.content.icon || <BoardGlyph />}</span>
+        <span className="board-icon">
+          {el.content.iconImage ? <img src={el.content.iconImage} alt="" draggable={false} /> : el.content.icon || <BoardGlyph />}
+        </span>
       </div>
       {editing ? (
         <input
@@ -198,9 +238,13 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
     const current = getCurrentItems(el.id);
     if (e.key === 'Enter') {
       e.preventDefault();
-      const fresh = { id: uid(), text: '', done: false };
+      const fresh = { id: uid(), text: '', done: false, indent: item.indent ?? 0 };
       setItems([...current.slice(0, index + 1), fresh, ...current.slice(index + 1)], false);
       setFocusId(fresh.id);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const indent = Math.max(0, Math.min(3, (item.indent ?? 0) + (e.shiftKey ? -1 : 1)));
+      updateItem(item.id, { indent }, false);
     } else if (e.key === 'Backspace' && item.text === '' && current.length > 1) {
       e.preventDefault();
       setItems(current.filter((i) => i.id !== item.id), false);
@@ -242,7 +286,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
       </div>
       <ul className="todo-items">
         {items.map((item, index) => (
-          <li key={item.id} className={item.done ? 'done' : ''}>
+          <li key={item.id} className={item.done ? 'done' : ''} style={item.indent ? { paddingLeft: item.indent * 20 } : undefined}>
             <input
               data-nodrag
               type="checkbox"
@@ -261,6 +305,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
             ) : (
               <span className={`todo-text ${item.text ? '' : 'placeholder'}`}>{item.text || 'Empty task'}</span>
             )}
+            <DueDate item={item} editing={editing} onChange={(due) => updateItem(item.id, { due }, false)} />
           </li>
         ))}
       </ul>
@@ -277,6 +322,43 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
         </button>
       )}
     </div>
+  );
+}
+
+function dueState(due: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  return due < today ? 'overdue' : due === today ? 'today' : 'later';
+}
+
+function DueDate({ item, editing, onChange }: { item: TodoItem; editing: boolean; onChange(due: string | null): void }) {
+  const [open, setOpen] = useState(false);
+  if (!item.due && !editing) return null;
+  if (editing && (open || item.due)) {
+    return (
+      <input
+        type="date"
+        data-nodrag
+        className={`due-input ${item.due ? dueState(item.due) : ''}`}
+        value={item.due ?? ''}
+        autoFocus={open && !item.due}
+        onChange={(e) => onChange(e.target.value || null)}
+        onBlur={() => setOpen(false)}
+        title="Due date"
+      />
+    );
+  }
+  if (editing) {
+    return (
+      <button data-nodrag className="due-add" title="Set due date" onClick={() => setOpen(true)}>
+        📅
+      </button>
+    );
+  }
+  const d = new Date(`${item.due}T00:00:00`);
+  return (
+    <span className={`due-badge ${dueState(item.due!)}`} title={`Due ${d.toDateString()}`}>
+      Due {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+    </span>
   );
 }
 
@@ -316,6 +398,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
     <figure className="card image">
       <div className="image-frame" style={el.content.ratio ? { aspectRatio: `1 / ${el.content.ratio}` } : undefined}>
         {el.content.src && <img src={el.content.src} alt={el.content.caption || ''} draggable={false} loading="lazy" />}
+        {el.content.annotation?.length ? <StrokesSvg strokes={el.content.annotation} ratio={el.content.ratio ?? 0.66} className="annotation-svg" /> : null}
       </div>
       {editing ? (
         <input
@@ -338,19 +421,20 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
 
 // ---------------------------------------------------------------- link
 
-function LinkBody({ el, editing }: BodyProps<'link'>) {
-  const { url, title, description, image, site, loading } = el.content;
+function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
+  const { url, title, description, image, site, loading, kind } = el.content;
+  const embed = url ? embedFor(url) : null;
   const ref = useAutoFocus<HTMLInputElement>(editing);
   const [imageFailed, setImageFailed] = useState(false);
   if (editing || !url) {
     return (
       <div className="card link link-edit">
-        <label className="link-label">Link</label>
+        <label className="link-label">{kind ? kind[0].toUpperCase() + kind.slice(1) : 'Link'}</label>
         <input
           ref={ref}
           className="link-input"
           defaultValue={url}
-          placeholder="Paste a web address…"
+          placeholder={LINK_PLACEHOLDERS[kind ?? 'default']}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
           }}
@@ -361,6 +445,29 @@ function LinkBody({ el, editing }: BodyProps<'link'>) {
             stopEditing();
           }}
         />
+      </div>
+    );
+  }
+  if (embed) {
+    return (
+      <div className={`card link link-embed embed-${embed.kind}`}>
+        <div className="embed-frame" style={embed.ratio ? { aspectRatio: `1 / ${embed.ratio}` } : { height: embed.height }}>
+          <iframe
+            src={embed.src}
+            title={title || url}
+            loading="lazy"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+            referrerPolicy="strict-origin-when-cross-origin"
+            style={{ pointerEvents: selected ? 'auto' : 'none' }}
+          />
+          {!selected && <div className="embed-shield" title="Click to select, then use the player" />}
+        </div>
+        <div className="link-site embed-bar">
+          <span>{title && !loading ? title : site || hostOf(url)}</span>
+          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title="Open link">
+            ↗
+          </a>
+        </div>
       </div>
     );
   }
@@ -437,8 +544,17 @@ function formatSize(bytes: number) {
 function FileBody({ el }: BodyProps<'file'>) {
   const { name, size, src, mime } = el.content;
   const ext = (name.split('.').pop() || 'file').slice(0, 4).toUpperCase();
+  const media = mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : null;
   return (
-    <div className="card file">
+    <div className={`card file ${media ? 'file-media' : ''}`}>
+      {media === 'video' && <video data-nodrag src={src} controls preload="metadata" className="file-video" />}
+      {media === 'audio' && <audio data-nodrag src={src} controls preload="metadata" className="file-audio" />}
+      {mime === 'application/pdf' && (
+        <a data-nodrag className="file-preview-link" href={src} target="_blank" rel="noopener">
+          Preview PDF ↗
+        </a>
+      )}
+      <div className="file-row">
       <div className="file-icon" data-kind={mime.split('/')[0]}>
         {ext}
       </div>
@@ -448,9 +564,10 @@ function FileBody({ el }: BodyProps<'file'>) {
         </div>
         <div className="file-size">{formatSize(size)}</div>
       </div>
-      <a data-nodrag className="icon-btn small" href={src} download={name} title="Download">
-        ⤓
-      </a>
+        <a data-nodrag className="icon-btn small" href={src} download={name} title="Download">
+          ⤓
+        </a>
+      </div>
     </div>
   );
 }

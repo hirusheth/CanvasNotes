@@ -26,7 +26,10 @@ import {
   centerOn,
   getRect,
 } from '../viewport';
-import { addFiles, addLink, addTextNote, columnIndexAt, isUrl, moveToBoard } from '../actions';
+import { addFiles, addLink, addTextNote, boardUrl, columnIndexAt, isUrl, moveToBoard } from '../actions';
+import { openDrawing } from '../elements/Sketch';
+import { openDocument } from '../elements/MoreBodies';
+import { ROOT_ID } from '../types';
 import { CanvasContext, type CanvasApi, type DragState, type DropTarget } from './canvasContext';
 import { ItemFrame } from './ItemFrame';
 import { LinesLayer, type LineDraft } from './LinesLayer';
@@ -51,6 +54,8 @@ type Gesture =
   | { kind: 'line-end'; lineId: string; which: 'from' | 'to' };
 
 const DRAG_THRESHOLD = 4;
+// Clicking an already-selected card of these types starts editing it.
+const CLICK_TO_EDIT = new Set(['note', 'heading', 'todo', 'column', 'link', 'swatch', 'table', 'comment']);
 
 function isTypingTarget(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -90,6 +95,11 @@ export function Canvas() {
   const ids = useStore(topLevelKey);
   const topLevel = useMemo(() => (ids ? ids.split(',') : []), [ids]);
   const vp = useViewport(boardId);
+  const appearance = useStore((s) => {
+    const b = s.elements[boardId] ?? (boardId === ROOT_ID ? s.elements[ROOT_ID] : undefined);
+    return b?.type === 'board' ? `${b.content.background ?? ''}|${b.content.hideGrid ? 1 : 0}` : '|0';
+  });
+  const [background, hideGrid] = appearance.split('|');
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -351,7 +361,8 @@ export function Canvas() {
           capture(e);
           // Dragging something selected along with its column parent would double-move it.
           const { elements } = getState();
-          g.ids = g.ids.filter((id) => !(elements[id]?.columnId && g.ids.includes(elements[id].columnId!)));
+          g.ids = g.ids.filter((id) => !(elements[id]?.columnId && g.ids.includes(elements[id].columnId!)) && !elements[id]?.locked);
+          if (g.ids.length === 0) return;
           setState({ editingId: null });
         }
         const startRects = drag?.startRects ?? new Map(g.ids.map((id) => [id, allRects().get(id) ?? lineBox(getState().elements[id]) ?? { x: 0, y: 0, w: 0, h: 0 }]));
@@ -445,7 +456,7 @@ export function Canvas() {
         } else if (!g.moved) {
           const el = getState().elements[g.id];
           if (g.shift && g.wasSelected) setState({ selection: getState().selection.filter((id) => id !== g.id) });
-          else if (!g.shift && g.wasSelected && getState().selection.length === 1 && el && el.type !== 'board' && el.type !== 'image' && el.type !== 'file') {
+          else if (!g.shift && g.wasSelected && getState().selection.length === 1 && el && CLICK_TO_EDIT.has(el.type)) {
             // Clicking an already-selected card starts editing it.
             startEditing(g.id);
           } else if (!g.shift) setState({ selection: [g.id] });
@@ -486,7 +497,12 @@ export function Canvas() {
 
   const onItemDoubleClick: CanvasApi['onItemDoubleClick'] = (e, el) => {
     e.stopPropagation();
-    if (el.type === 'board') navigate(el.id);
+    if (el.type === 'board' && (e.ctrlKey || e.metaKey)) window.open(boardUrl(el.id), '_blank');
+    else if (el.type === 'board') navigate(el.id);
+    else if (el.type === 'alias') {
+      if (getState().elements[el.content.boardId]?.section === 'canvas') navigate(el.content.boardId);
+    } else if (el.type === 'sketch') openDrawing(el.id);
+    else if (el.type === 'document') openDocument(el.id);
     else if (el.type === 'link' && getState().editingId !== el.id && el.content.url) window.open(el.content.url, '_blank', 'noopener');
     else if (el.type === 'image' || el.type === 'file') window.open(el.content.src, '_blank', 'noopener');
     else startEditing(el.id);
@@ -540,7 +556,12 @@ export function Canvas() {
       <div
         ref={canvasRef}
         className={`canvas ${panning ? 'panning' : ''} ${tool === 'line' ? 'tool-line' : ''}`}
-        style={{ backgroundSize: `${grid}px ${grid}px`, backgroundPosition: `${vp.x}px ${vp.y}px` }}
+        style={{
+          backgroundSize: `${grid}px ${grid}px`,
+          backgroundPosition: `${vp.x}px ${vp.y}px`,
+          backgroundColor: background || undefined,
+          backgroundImage: hideGrid === '1' ? 'none' : undefined,
+        }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

@@ -87,6 +87,17 @@ export function TopBar() {
             ⤢
           </button>
         </div>
+        <button className="icon-btn" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title="Export board">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+            <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+          </svg>
+        </button>
+        <button className="icon-btn" onClick={() => setState({ presenting: true, selection: [], editingId: null, panel: null })} title="Presentation mode (Ctrl Shift P)">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+            <rect x="3" y="4" width="18" height="13" rx="2" />
+            <path d="M10 8v5l4-2.5zM8 21h8M12 17v4" />
+          </svg>
+        </button>
         <button className="search-btn" onClick={() => setState({ panel: 'search' })} title="Search (Ctrl K)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="11" cy="11" r="7" />
@@ -175,13 +186,32 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
         Import backup…
       </button>
       <div className="menu-sep" />
+      {(
+        [
+          ['Settings', 'settings'],
+          ['Templates', 'templates'],
+          ['Unsorted', 'inbox'],
+          ['Export board', 'export'],
+          ['Trash', 'trash'],
+        ] as const
+      ).map(([label, panel]) => (
+        <button
+          key={panel}
+          onClick={() => {
+            onClose();
+            setState({ panel });
+          }}
+        >
+          {label}
+        </button>
+      ))}
       <button
         onClick={() => {
           onClose();
-          setState({ panel: 'trash' });
+          setState({ modal: { kind: 'labels', ids: [] } });
         }}
       >
-        Trash
+        Manage labels
       </button>
       <button
         onClick={() => {
