@@ -23,6 +23,7 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
     `item-${el.type}`,
     el.color ? (el.color.startsWith('#') ? 'color-custom' : `color-${el.color}`) : '',
     el.locked ? 'locked' : '',
+    el.colorStrip && el.color ? 'strip' : '',
     selected ? 'selected' : '',
     editing ? 'editing' : '',
     inColumn ? 'in-column' : '',

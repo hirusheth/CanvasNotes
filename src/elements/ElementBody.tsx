@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { columnChildren, getState, patchElement, startEditing, uid, useStore } from '../store';
-import type { El, ElementOf, TodoItem } from '../types';
+import type { El, ElementOf, MediaOptions, TodoItem } from '../types';
+import { pickFiles } from '../actions';
+import { fillPlaceholder } from '../moreActions';
 import { RichText } from './RichText';
 import { ItemFrame } from '../components/ItemFrame';
 import { useCanvas } from '../components/canvasContext';
@@ -42,7 +44,7 @@ export const ElementBody = memo(function ElementBody({ el, editing, selected }: 
     case 'sketch':
       return (
         <div className="card sketch-card">
-          <SketchView strokes={el.content.strokes} ratio={el.content.ratio} />
+          <SketchView strokes={el.content.strokes} ratio={el.content.ratio} background={el.content.background} />
         </div>
       );
     case 'table':
@@ -138,7 +140,10 @@ function BoardBody({ el, editing }: BodyProps<'board'>) {
       ) : (
         <div className="board-title">{el.content.title || 'Untitled board'}</div>
       )}
-      <div className="board-meta">{counts === 0 ? 'Empty' : `${counts} card${counts === 1 ? '' : 's'}`}</div>
+      <div className="board-meta">
+        {el.content.protected ? (el.content.unlocked ? '🔓 Unlocked' : '🔒 Password protected') : counts === 0 ? 'Empty' : `${counts} card${counts === 1 ? '' : 's'}`}
+        {el.content.publicToken ? ' · 🌐 Published' : ''}
+      </div>
     </div>
   );
 }
@@ -166,8 +171,9 @@ function ColumnBody({ el, editing }: BodyProps<'column'>) {
   const collapsed = el.content.collapsed;
 
   return (
-    <div className="column">
+    <div className={`column ${el.content.folder ? 'folder' : ''}`}>
       <div className="column-header">
+        {el.content.folder && <span className="folder-icon">{collapsed ? '📁' : '📂'}</span>}
         {editing ? (
           <input
             ref={ref}
@@ -394,11 +400,41 @@ function AutoInput({
 
 function ImageBody({ el, editing }: BodyProps<'image'>) {
   const ref = useAutoFocus<HTMLInputElement>(editing);
+  const { src, ratio, crop, attribution } = el.content;
+  if (!src) {
+    // Milanote's "Image/File placeholder": an empty card waiting for a file.
+    return (
+      <div
+        className="card image-placeholder"
+        data-nodrag
+        onClick={() => pickFiles('*/*', ([file]) => file && void fillPlaceholder(el.id, file))}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const file = e.dataTransfer.files[0];
+          if (file) void fillPlaceholder(el.id, file);
+        }}
+      >
+        <span className="placeholder-icon">＋</span>
+        <span>Add an image or file</span>
+      </div>
+    );
+  }
+  // A crop shows part of the image: scale it up inside a frame with the crop's proportions.
+  const c = crop ?? { x: 0, y: 0, w: 1, h: 1 };
+  const frameRatio = ratio ? (ratio * c.h) / c.w : undefined;
+  const cropped = !!crop;
   return (
     <figure className="card image">
-      <div className="image-frame" style={el.content.ratio ? { aspectRatio: `1 / ${el.content.ratio}` } : undefined}>
-        {el.content.src && <img src={el.content.src} alt={el.content.caption || ''} draggable={false} loading="lazy" />}
-        {el.content.annotation?.length ? <StrokesSvg strokes={el.content.annotation} ratio={el.content.ratio ?? 0.66} className="annotation-svg" /> : null}
+      <div className={`image-frame ${cropped ? 'cropped' : ''}`} style={frameRatio ? { aspectRatio: `1 / ${frameRatio}` } : undefined}>
+        <div
+          className="image-inner"
+          style={cropped ? { width: `${100 / c.w}%`, height: `${100 / c.h}%`, left: `${(-c.x / c.w) * 100}%`, top: `${(-c.y / c.h) * 100}%` } : undefined}
+        >
+          <img src={src} alt={el.content.caption || ''} draggable={false} loading="lazy" />
+          {el.content.annotation?.length ? <StrokesSvg strokes={el.content.annotation} ratio={ratio ?? 0.66} className="annotation-svg" /> : null}
+        </div>
       </div>
       {editing ? (
         <input
@@ -415,6 +451,11 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
       ) : (
         el.content.caption && <figcaption>{el.content.caption}</figcaption>
       )}
+      {attribution && (
+        <a data-nodrag className="attribution" href={attribution.url} target="_blank" rel="noopener noreferrer">
+          From Wikimedia Commons · {attribution.label}
+        </a>
+      )}
     </figure>
   );
 }
@@ -423,7 +464,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
 
 function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
   const { url, title, description, image, site, loading, kind } = el.content;
-  const embed = url ? embedFor(url) : null;
+  const embed = url ? embedFor(url, el.content.media) : null;
   const ref = useAutoFocus<HTMLInputElement>(editing);
   const [imageFailed, setImageFailed] = useState(false);
   if (editing || !url) {
@@ -535,7 +576,13 @@ function SwatchBody({ el, editing }: BodyProps<'swatch'>) {
 
 // ---------------------------------------------------------------- file
 
-function formatSize(bytes: number) {
+// Media fragments (#t=start,end) make uploaded audio/video play only that part.
+function mediaSrc(src: string, media?: MediaOptions) {
+  if (!media?.start && !media?.end) return src;
+  return `${src}#t=${media.start ?? 0}${media.end ? `,${media.end}` : ''}`;
+}
+
+export function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -547,8 +594,22 @@ function FileBody({ el }: BodyProps<'file'>) {
   const media = mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : null;
   return (
     <div className={`card file ${media ? 'file-media' : ''}`}>
-      {media === 'video' && <video data-nodrag src={src} controls preload="metadata" className="file-video" />}
-      {media === 'audio' && <audio data-nodrag src={src} controls preload="metadata" className="file-audio" />}
+      {media === 'video' && (
+        <video
+          data-nodrag
+          src={mediaSrc(src, el.content.media)}
+          controls
+          preload="metadata"
+          className="file-video"
+          loop={el.content.media?.loop}
+          autoPlay={el.content.media?.autoplay}
+          muted={el.content.media?.autoplay}
+          playsInline
+        />
+      )}
+      {media === 'audio' && (
+        <audio data-nodrag src={mediaSrc(src, el.content.media)} controls preload="metadata" className="file-audio" loop={el.content.media?.loop} autoPlay={el.content.media?.autoplay} />
+      )}
       {mime === 'application/pdf' && (
         <a data-nodrag className="file-preview-link" href={src} target="_blank" rel="noopener">
           Preview PDF ↗

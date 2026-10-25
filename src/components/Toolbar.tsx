@@ -4,10 +4,12 @@ import { getState, setState, useStore } from '../store';
 import type { ElementType } from '../types';
 import { isOverCanvas, screenToWorld } from '../viewport';
 import { getToolbarPrefs, onToolbarPrefs, type ToolId, TOOL_LABELS } from './toolbarPrefs';
+import { newFolder } from '../moreActions';
 
 interface Tool {
   id: ToolId;
-  type: ElementType;
+  // Pseudo-types open a dialog or build a special card instead of a plain element.
+  type: ElementType | 'folder' | 'imageSearch' | 'aiIdeas';
   kind?: 'video' | 'audio' | 'map';
   icon: ReactNode;
   hint: string;
@@ -37,6 +39,9 @@ const TOOLS: Tool[] = [
   { id: 'video', type: 'link', kind: 'video', hint: 'YouTube or Vimeo video', icon: <I><rect x="3" y="5.5" width="18" height="13" rx="2.5" /><path d="M10 9.5v5l4.5-2.5z" fill="currentColor" /></I> },
   { id: 'audio', type: 'link', kind: 'audio', hint: 'Spotify or SoundCloud', icon: <I d="M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z" /> },
   { id: 'map', type: 'link', kind: 'map', hint: 'Google Maps location', icon: <I d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" /> },
+  { id: 'folder', type: 'folder', hint: 'A folder that holds cards', icon: <I d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /> },
+  { id: 'imageSearch', type: 'imageSearch', hint: 'Search free images', icon: <I><circle cx="10.5" cy="10.5" r="6" /><path d="M20 20l-5-5M8 11l2-2 3 3" /></I> },
+  { id: 'aiIdeas', type: 'aiIdeas', hint: 'Brainstorm ideas with Claude', icon: <I d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" /> },
 ];
 
 export function useToolbarPrefs() {
@@ -59,12 +64,19 @@ export function Toolbar() {
   const prefs = useToolbarPrefs();
   const dragging = useRef(false);
 
+  const create = (tool: Tool, at: ReturnType<typeof centerPlacement>) => {
+    if (tool.type === 'folder') return newFolder(at);
+    if (tool.type === 'imageSearch') return setState({ modal: { kind: 'imageSearch', at } });
+    if (tool.type === 'aiIdeas') return setState({ modal: { kind: 'aiIdeas', at } });
+    createElement(tool.type, at, { kind: tool.kind });
+  };
+
   const activate = (tool: Tool) => {
     if (tool.type === 'line') {
       setState({ tool: getState().tool === 'line' ? null : 'line', selection: [], editingId: null });
       return;
     }
-    createElement(tool.type, centerPlacement(), { kind: tool.kind });
+    create(tool, centerPlacement());
   };
 
   const dropAt = (tool: Tool, clientX: number, clientY: number) => {
@@ -75,7 +87,7 @@ export function Toolbar() {
     if (tool.type === 'image' || tool.type === 'file') {
       pickFiles(tool.type === 'image' ? 'image/*' : '*/*', (files) => addFiles(files, at));
     } else {
-      createElement(tool.type, at, { kind: tool.kind });
+      create(tool, at);
     }
   };
 

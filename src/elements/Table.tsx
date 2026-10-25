@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { patchElement, startEditing } from '../store';
+import { patchElement, startEditing, toast } from '../store';
 import type { CellStyle, CellType, ElementOf, TableContent } from '../types';
 import { colName, evaluateGrid, FORMULA_MESSAGES, type Evaluated } from '../formula';
+import { parseDelimited } from '../moreActions';
 
 const CELL_TYPES: { value: CellType; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -14,31 +15,55 @@ const CELL_TYPES: { value: CellType; label: string }[] = [
   { value: 'date', label: 'Date & Time' },
 ];
 const CELL_COLORS = [null, '#fff3bf', '#ffe0cc', '#ffd9df', '#e9e0ff', '#d7ecff', '#d5f5e6', '#e2e5ea'];
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY'];
+const DATE_FORMATS: { value: NonNullable<CellStyle['dateFormat']>; label: string }[] = [
+  { value: 'short', label: '1/2/26' },
+  { value: 'medium', label: 'Jan 2, 2026' },
+  { value: 'long', label: 'Friday, January 2, 2026' },
+  { value: 'iso', label: '2026-01-02' },
+];
 
 const key = (r: number, c: number) => `${r}:${c}`;
 
-function formatValue(v: Evaluated, style: CellStyle | undefined, raw: string): string {
+type Cell = { r: number; c: number };
+type Range = { r1: number; c1: number; r2: number; c2: number };
+
+const norm = (a: Cell, b: Cell): Range => ({ r1: Math.min(a.r, b.r), c1: Math.min(a.c, b.c), r2: Math.max(a.r, b.r), c2: Math.max(a.c, b.c) });
+const inRange = (rg: Range | null, r: number, c: number) => !!rg && r >= rg.r1 && r <= rg.r2 && c >= rg.c1 && c <= rg.c2;
+
+// The last cells copied from any table, so "Paste Values" can paste results instead of formulas.
+let copiedValues: string[][] | null = null;
+
+export function formatValue(v: Evaluated, style: CellStyle | undefined, raw: string): string {
   if (v.error) return v.error;
   const type = style?.type ?? 'auto';
   const value = v.value;
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
   if (typeof value === 'number') {
+    const decimals = style?.decimals ?? undefined;
+    const digits = decimals === undefined || decimals === null ? {} : { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
+    const grouping = style?.thousands === false ? { useGrouping: false } : {};
     switch (type) {
       case 'currency':
-        return value.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+        return value.toLocaleString(undefined, { style: 'currency', currency: style?.currency || 'USD', ...digits, ...grouping });
       case 'percentage':
-        return `${(value * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+        return value.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 2, ...digits, ...grouping });
+      case 'number':
+        return value.toLocaleString(undefined, { maximumFractionDigits: 6, ...digits, ...grouping });
       case 'text':
-        return raw;
       case 'date':
         return raw;
       default:
-        return raw.startsWith('=') ? value.toLocaleString(undefined, { maximumFractionDigits: 6 }) : raw.trim();
+        return raw.startsWith('=') || decimals !== undefined ? value.toLocaleString(undefined, { maximumFractionDigits: 6, ...digits, ...grouping }) : raw.trim();
     }
   }
   if (type === 'date' && value) {
     const d = new Date(value);
-    if (!Number.isNaN(d.getTime())) return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    if (!Number.isNaN(d.getTime())) {
+      const fmt = style?.dateFormat ?? 'medium';
+      if (fmt === 'iso') return d.toISOString().slice(0, 10);
+      return d.toLocaleDateString(undefined, fmt === 'short' ? { dateStyle: 'short' } : fmt === 'long' ? { dateStyle: 'full' } : { dateStyle: 'medium' });
+    }
   }
   return String(value);
 }
@@ -60,15 +85,17 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
   const { cells, styles = {}, header = true, title } = el.content;
   const values = useMemo(() => evaluateGrid(cells), [cells]);
   const cols = Math.max(1, ...cells.map((r) => r.length));
-  const [active, setActive] = useState<{ r: number; c: number } | null>(null);
+  const [active, setActive] = useState<Cell | null>(null);
+  const [anchor, setAnchor] = useState<Cell | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
+  const range: Range | null = active && anchor && (anchor.r !== active.r || anchor.c !== active.c) ? norm(anchor, active) : null;
 
   const update = (patch: Partial<TableContent>, coalesce?: string) => patchElement(el.id, { content: patch }, coalesce ? { coalesce } : undefined);
+  const grid = () => cells.map((row) => [...row, ...Array(Math.max(0, cols - row.length)).fill('')]);
 
   const setCell = (r: number, c: number, text: string) => {
-    const next = cells.map((row) => [...row]);
-    while (next[r].length < cols) next[r].push('');
+    const next = grid();
     next[r][c] = text;
     update({ cells: next }, `table:${el.id}:${r}:${c}`);
   };
@@ -79,25 +106,89 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
       const flat = cells.flatMap((row, r) => row.map((v, c) => ({ r, c, v })));
       const empty = flat.find((x) => !x.v.trim());
       setActive(empty ? { r: empty.r, c: empty.c } : { r: 0, c: 0 });
+      setAnchor(null);
     }
-    if (!editing) setActive(null);
+    if (!editing) {
+      setActive(null);
+      setAnchor(null);
+    }
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     if (editing && active) inputs.current.get(key(active.r, active.c))?.focus();
   }, [editing, active]);
 
-  const move = (r: number, c: number) => {
-    const rr = Math.max(0, Math.min(cells.length - 1, r));
-    const cc = Math.max(0, Math.min(cols - 1, c));
-    setActive({ r: rr, c: cc });
+  const move = (r: number, c: number, extend = false) => {
+    const next = { r: Math.max(0, Math.min(cells.length - 1, r)), c: Math.max(0, Math.min(cols - 1, c)) };
+    if (extend) setAnchor((a) => a ?? active);
+    else setAnchor(null);
+    setActive(next);
+  };
+
+  // The selected block (or the active cell) as a rectangle.
+  const selection = (): Range | null => range ?? (active ? { r1: active.r, c1: active.c, r2: active.r, c2: active.c } : null);
+
+  const clearRange = (rg: Range) => {
+    const next = grid();
+    for (let r = rg.r1; r <= rg.r2; r++) for (let c = rg.c1; c <= rg.c2; c++) next[r][c] = '';
+    update({ cells: next });
+  };
+
+  const copyRange = (rg: Range, cut = false) => {
+    const raw: string[][] = [];
+    const vals: string[][] = [];
+    for (let r = rg.r1; r <= rg.r2; r++) {
+      raw.push(cells[r].slice(rg.c1, rg.c2 + 1).map((v) => v ?? ''));
+      vals.push(values[r].slice(rg.c1, rg.c2 + 1).map((v, i) => (v.error ? '' : formatValue(v, styles[key(r, rg.c1 + i)], cells[r][rg.c1 + i] ?? ''))));
+    }
+    copiedValues = vals;
+    void navigator.clipboard?.writeText(raw.map((row) => row.join('\t')).join('\n')).catch(() => {});
+    if (cut) clearRange(rg);
+    toast(`${cut ? 'Cut' : 'Copied'} ${(rg.r2 - rg.r1 + 1) * (rg.c2 - rg.c1 + 1)} cells`);
+  };
+
+  // Paste a block of cells at the active cell, growing the table if needed.
+  const pasteBlock = (block: string[][]) => {
+    if (!active || !block.length) return;
+    const next = grid();
+    const needRows = active.r + block.length;
+    const needCols = Math.max(cols, active.c + Math.max(...block.map((b) => b.length)));
+    while (next.length < needRows) next.push(Array(needCols).fill(''));
+    for (const row of next) while (row.length < needCols) row.push('');
+    block.forEach((row, i) => row.forEach((v, j) => (next[active.r + i][active.c + j] = v)));
+    update({ cells: next });
+    setAnchor(active);
+    setActive({ r: active.r + block.length - 1, c: active.c + Math.max(...block.map((b) => b.length)) - 1 });
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text/plain');
+    if (!/[\t\n]/.test(text.trim())) return; // single value: let the input handle it
+    e.preventDefault();
+    pasteBlock(parseDelimited(text, text.includes('\t') ? '\t' : ','));
   };
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>, r: number, c: number) => {
-    if (e.key === 'Tab') {
+    const mod = e.ctrlKey || e.metaKey;
+    const rg = range;
+    if (rg && (e.key === 'Delete' || e.key === 'Backspace')) {
+      e.preventDefault();
+      clearRange(rg);
+    } else if (mod && (e.key === 'c' || e.key === 'x') && rg) {
+      e.preventDefault();
+      copyRange(rg, e.key === 'x');
+    } else if (mod && e.key === 'c' && !(e.currentTarget.selectionEnd! > e.currentTarget.selectionStart!)) {
+      // Nothing highlighted in the input: copy the whole cell (so Paste Values works).
+      copyRange({ r1: r, c1: c, r2: r, c2: c });
+    } else if (mod && e.key === 'a' && e.shiftKey) {
+      e.preventDefault();
+      setAnchor({ r: 0, c: 0 });
+      setActive({ r: cells.length - 1, c: cols - 1 });
+    } else if (e.key === 'Tab') {
       e.preventDefault();
       if (!e.shiftKey && c === cols - 1 && r === cells.length - 1) {
         addRow(cells.length);
+        setAnchor(null);
         setActive({ r: r + 1, c: 0 });
       } else if (e.shiftKey) move(c === 0 ? r - 1 : r, c === 0 ? cols - 1 : c - 1);
       else move(c === cols - 1 ? r + 1 : r, c === cols - 1 ? 0 : c + 1);
@@ -105,39 +196,47 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
       e.preventDefault();
       if (!e.shiftKey && r === cells.length - 1) {
         addRow(cells.length);
+        setAnchor(null);
         setActive({ r: r + 1, c });
       } else move(r + (e.shiftKey ? -1 : 1), c);
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
-      move(r - 1, c);
-    } else if (e.key === 'ArrowDown') {
+      move(r + (e.key === 'ArrowUp' ? -1 : 1), c, e.shiftKey);
+    } else if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
-      move(r + 1, c);
+      move(r, c + (e.key === 'ArrowLeft' ? -1 : 1), true);
     } else if (e.key === 'Escape') {
-      startEditing(null);
+      if (rg) setAnchor(null);
+      else startEditing(null);
     }
   };
 
   const addRow = (at: number) => {
-    const next = cells.map((row) => [...row]);
+    const next = grid();
     next.splice(at, 0, Array(cols).fill(''));
     update({ cells: next, styles: shiftStyles(styles, 'row', at, 1) });
   };
   const addCol = (at: number) => {
-    update({ cells: cells.map((row) => [...row.slice(0, at), '', ...row.slice(at)]), styles: shiftStyles(styles, 'col', at, 1) });
+    update({ cells: grid().map((row) => [...row.slice(0, at), '', ...row.slice(at)]), styles: shiftStyles(styles, 'col', at, 1) });
   };
-  const removeRow = (r: number) => {
-    if (cells.length <= 1) return;
-    update({ cells: cells.filter((_, i) => i !== r), styles: shiftStyles(styles, 'row', r, -1) });
+  const removeRows = (r1: number, r2: number) => {
+    if (cells.length - (r2 - r1 + 1) < 1) return;
+    let st = styles;
+    for (let r = r2; r >= r1; r--) st = shiftStyles(st, 'row', r, -1);
+    update({ cells: cells.filter((_, i) => i < r1 || i > r2), styles: st });
+    setAnchor(null);
   };
-  const removeCol = (c: number) => {
-    if (cols <= 1) return;
-    update({ cells: cells.map((row) => row.filter((_, i) => i !== c)), styles: shiftStyles(styles, 'col', c, -1) });
+  const removeCols = (c1: number, c2: number) => {
+    if (cols - (c2 - c1 + 1) < 1) return;
+    let st = styles;
+    for (let c = c2; c >= c1; c--) st = shiftStyles(st, 'col', c, -1);
+    update({ cells: grid().map((row) => row.filter((_, i) => i < c1 || i > c2)), styles: st });
+    setAnchor(null);
   };
   const moveRow = (r: number, d: number) => {
     const t = r + d;
     if (t < 0 || t >= cells.length) return;
-    const next = cells.map((row) => [...row]);
+    const next = grid();
     [next[r], next[t]] = [next[t], next[r]];
     update({ cells: next });
   };
@@ -145,25 +244,34 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
     const t = c + d;
     if (t < 0 || t >= cols) return;
     update({
-      cells: cells.map((row) => {
-        const n = [...row];
-        [n[c], n[t]] = [n[t] ?? '', n[c] ?? ''];
-        return n;
+      cells: grid().map((row) => {
+        [row[c], row[t]] = [row[t], row[c]];
+        return row;
       }),
     });
   };
-  const styleCell = (r: number, c: number, patch: Partial<CellStyle>, wholeColumn = false) => {
+  // Style the selected block, or the whole column for cell types and formats.
+  const styleCells = (patch: Partial<CellStyle>, wholeColumn = false) => {
+    const rg = selection() ?? { r1: 0, c1: 0, r2: 0, c2: 0 };
     const next = { ...styles };
-    const targets = wholeColumn ? cells.map((_, i) => key(i, c)) : [key(r, c)];
-    for (const k of targets) next[k] = { ...next[k], ...patch };
+    for (let c = rg.c1; c <= rg.c2; c++) {
+      const rows = wholeColumn ? cells.map((_, i) => i) : Array.from({ length: rg.r2 - rg.r1 + 1 }, (_, i) => rg.r1 + i);
+      for (const r of rows) next[key(r, c)] = { ...next[key(r, c)], ...patch };
+    }
     update({ styles: next });
   };
 
   const onContext = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!inRange(range, r, c)) {
+      setAnchor(null);
+      if (editing) setActive({ r, c });
+    }
     setMenu({ x: e.clientX, y: e.clientY, r, c });
   };
+
+  const menuRange = (m: Menu): Range => (range && inRange(range, m.r, m.c) ? range : { r1: m.r, c1: m.c, r2: m.r, c2: m.c });
 
   return (
     <div className="card table-card">
@@ -185,7 +293,16 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
             <thead>
               <tr>
                 {Array.from({ length: cols }, (_, c) => (
-                  <th key={c} className="col-label" onContextMenu={(e) => onContext(e, active?.r ?? 0, c)}>
+                  <th
+                    key={c}
+                    className="col-label"
+                    title="Select column"
+                    onClick={() => {
+                      setAnchor({ r: 0, c });
+                      setActive({ r: cells.length - 1, c });
+                    }}
+                    onContextMenu={(e) => onContext(e, active?.r ?? 0, c)}
+                  >
                     {colName(c)}
                   </th>
                 ))}
@@ -202,14 +319,22 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
                   const isActive = editing && active?.r === r && active?.c === c;
                   const style = { textAlign: align(st, v), background: st?.bg ?? undefined, fontWeight: st?.bold || (header && r === 0) ? 600 : undefined };
                   return (
-                    <td key={c} style={style} title={v.error ? FORMULA_MESSAGES[v.error] : undefined} className={v.error ? 'cell-error' : ''} onContextMenu={(e) => onContext(e, r, c)}>
+                    <td
+                      key={c}
+                      style={style}
+                      title={v.error ? FORMULA_MESSAGES[v.error] : undefined}
+                      className={`${v.error ? 'cell-error' : ''} ${inRange(range, r, c) ? 'in-range' : ''}`}
+                      onContextMenu={(e) => onContext(e, r, c)}
+                      onMouseDown={(e) => {
+                        if (editing && e.shiftKey && active) {
+                          e.preventDefault();
+                          setAnchor((a) => a ?? active);
+                          setActive({ r, c });
+                        }
+                      }}
+                    >
                       {st?.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          data-nodrag
-                          checked={/^(true|1|yes|x)$/i.test(raw.trim())}
-                          onChange={(e) => setCell(r, c, e.target.checked ? 'TRUE' : 'FALSE')}
-                        />
+                        <input type="checkbox" data-nodrag checked={/^(true|1|yes|x)$/i.test(raw.trim())} onChange={(e) => setCell(r, c, e.target.checked ? 'TRUE' : 'FALSE')} />
                       ) : editing ? (
                         <input
                           ref={(n) => {
@@ -217,11 +342,17 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
                             else inputs.current.delete(key(r, c));
                           }}
                           className={`cell-input ${isActive ? 'active' : ''}`}
-                          value={isActive ? raw : raw.startsWith('=') ? formatValue(v, st, raw) : raw}
+                          value={isActive ? raw : raw.startsWith('=') || st?.type ? formatValue(v, st, raw) : raw}
                           style={{ textAlign: style.textAlign }}
-                          onFocus={() => !isActive && setActive({ r, c })}
+                          onFocus={() => {
+                            if (!isActive) {
+                              setActive({ r, c });
+                              setAnchor(null);
+                            }
+                          }}
                           onChange={(e) => setCell(r, c, e.target.value)}
                           onKeyDown={(e) => onKey(e, r, c)}
+                          onPaste={onPaste}
                         />
                       ) : (
                         <span className="cell-text">{formatValue(v, st, raw)}</span>
@@ -241,32 +372,58 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
           <label>
             <input type="checkbox" checked={header} onChange={(e) => update({ header: e.target.checked })} /> Header row
           </label>
-          {active && <span className="table-ref">{colName(active.c)}{active.r + 1}</span>}
+          {active && (
+            <span className="table-ref">
+              {range ? `${colName(range.c1)}${range.r1 + 1}:${colName(range.c2)}${range.r2 + 1}` : `${colName(active.c)}${active.r + 1}`}
+            </span>
+          )}
         </div>
       )}
       {menu && (
         <TableMenu
           menu={menu}
           style={styles[key(menu.r, menu.c)]}
+          multi={!!range && inRange(range, menu.r, menu.c)}
           onClose={() => setMenu(null)}
           actions={{
-            addRowAbove: () => addRow(menu.r),
-            addRowBelow: () => addRow(menu.r + 1),
-            addColLeft: () => addCol(menu.c),
-            addColRight: () => addCol(menu.c + 1),
-            removeRow: () => removeRow(menu.r),
-            removeCol: () => removeCol(menu.c),
+            addRowAbove: () => addRow(menuRange(menu).r1),
+            addRowBelow: () => addRow(menuRange(menu).r2 + 1),
+            addColLeft: () => addCol(menuRange(menu).c1),
+            addColRight: () => addCol(menuRange(menu).c2 + 1),
+            removeRow: () => removeRows(menuRange(menu).r1, menuRange(menu).r2),
+            removeCol: () => removeCols(menuRange(menu).c1, menuRange(menu).c2),
             moveRowUp: () => moveRow(menu.r, -1),
             moveRowDown: () => moveRow(menu.r, 1),
             moveColLeft: () => moveCol(menu.c, -1),
             moveColRight: () => moveCol(menu.c, 1),
-            clear: () => setCell(menu.r, menu.c, ''),
-            style: (patch, col) => styleCell(menu.r, menu.c, patch, col),
+            clear: () => clearRange(menuRange(menu)),
+            copy: () => copyRange(menuRange(menu)),
+            cut: () => copyRange(menuRange(menu), true),
+            paste: async () => {
+              const text = await navigator.clipboard?.readText().catch(() => '');
+              if (!editing) startEditing(el.id);
+              setActive({ r: menu.r, c: menu.c });
+              if (text) setTimeout(() => pasteBlockAt(menu, parseDelimited(text, text.includes('\t') ? '\t' : ',')), 0);
+            },
+            pasteValues: () => {
+              if (!copiedValues) return toast('Copy some cells first');
+              pasteBlockAt(menu, copiedValues);
+            },
+            style: (patch, col) => styleCells(patch, col),
           }}
         />
       )}
     </div>
   );
+
+  function pasteBlockAt(m: Menu, block: string[][]) {
+    const next = grid();
+    const needCols = Math.max(cols, m.c + Math.max(...block.map((b) => b.length)));
+    while (next.length < m.r + block.length) next.push(Array(needCols).fill(''));
+    for (const row of next) while (row.length < needCols) row.push('');
+    block.forEach((row, i) => row.forEach((v, j) => (next[m.r + i][m.c + j] = v)));
+    update({ cells: next });
+  }
 }
 
 function shiftStyles(styles: Record<string, CellStyle>, axis: 'row' | 'col', at: number, delta: number) {
@@ -284,19 +441,12 @@ function shiftStyles(styles: Record<string, CellStyle>, axis: 'row' | 'col', at:
   return out;
 }
 
-function TableMenu({
-  menu,
-  style,
-  onClose,
-  actions,
-}: {
-  menu: Menu;
-  style?: CellStyle;
-  onClose(): void;
-  actions: Record<'addRowAbove' | 'addRowBelow' | 'addColLeft' | 'addColRight' | 'removeRow' | 'removeCol' | 'moveRowUp' | 'moveRowDown' | 'moveColLeft' | 'moveColRight' | 'clear', () => void> & {
-    style(patch: Partial<CellStyle>, wholeColumn?: boolean): void;
-  };
-}) {
+type MenuActions = Record<
+  'addRowAbove' | 'addRowBelow' | 'addColLeft' | 'addColRight' | 'removeRow' | 'removeCol' | 'moveRowUp' | 'moveRowDown' | 'moveColLeft' | 'moveColRight' | 'clear' | 'copy' | 'cut' | 'paste' | 'pasteValues',
+  () => void
+> & { style(patch: Partial<CellStyle>, wholeColumn?: boolean): void };
+
+function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style?: CellStyle; multi: boolean; onClose(): void; actions: MenuActions }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
@@ -307,23 +457,30 @@ function TableMenu({
     fn();
     onClose();
   };
+  const type = style?.type ?? 'auto';
   // Portalled: a fixed-position menu inside the scaled canvas would be positioned relative to it.
   return createPortal(
     <div
       ref={ref}
       className="menu table-menu"
-      style={{ left: Math.min(menu.x, window.innerWidth - 240), top: Math.min(menu.y, window.innerHeight - 460) }}
+      style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.max(8, Math.min(menu.y, window.innerHeight - 520)) }}
       onPointerDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
       }}
     >
-      <button onClick={run(actions.addRowAbove)}>Add Row Above</button>
-      <button onClick={run(actions.addRowBelow)}>Add Row Below</button>
-      <button onClick={run(actions.addColLeft)}>Add Column Left</button>
-      <button onClick={run(actions.addColRight)}>Add Column Right</button>
+      <div className="menu-row">
+        <button onClick={run(actions.cut)}>Cut</button>
+        <button onClick={run(actions.copy)}>Copy</button>
+        <button onClick={run(actions.paste)}>Paste</button>
+      </div>
+      <button onClick={run(actions.pasteValues)}>Paste Values</button>
       <div className="menu-sep" />
+      <button onClick={run(actions.addRowAbove)}>{multi ? 'Add Rows Above' : 'Add Row Above'}</button>
+      <button onClick={run(actions.addRowBelow)}>{multi ? 'Add Rows Below' : 'Add Row Below'}</button>
+      <button onClick={run(actions.addColLeft)}>{multi ? 'Add Columns Left' : 'Add Column Left'}</button>
+      <button onClick={run(actions.addColRight)}>{multi ? 'Add Columns Right' : 'Add Column Right'}</button>
       <div className="menu-row">
         <button title="Move row up" onClick={run(actions.moveRowUp)}>↑</button>
         <button title="Move row down" onClick={run(actions.moveRowDown)}>↓</button>
@@ -334,11 +491,50 @@ function TableMenu({
       <div className="menu-label">Cell type (whole column)</div>
       <div className="menu-chips">
         {CELL_TYPES.map((t) => (
-          <button key={t.value} className={(style?.type ?? 'auto') === t.value ? 'active' : ''} onClick={run(() => actions.style({ type: t.value }, true))}>
+          <button key={t.value} className={type === t.value ? 'active' : ''} onClick={run(() => actions.style({ type: t.value }, true))}>
             {t.label}
           </button>
         ))}
       </div>
+      {(type === 'number' || type === 'currency' || type === 'percentage' || type === 'auto') && (
+        <>
+          <div className="menu-label">Decimals</div>
+          <div className="menu-chips">
+            {[null, 0, 1, 2, 3].map((d) => (
+              <button key={String(d)} className={(style?.decimals ?? null) === d ? 'active' : ''} onClick={run(() => actions.style({ decimals: d }, true))}>
+                {d === null ? 'Auto' : d}
+              </button>
+            ))}
+            <button className={style?.thousands === false ? '' : 'active'} title="Thousands separator" onClick={run(() => actions.style({ thousands: style?.thousands === false }, true))}>
+              1,000
+            </button>
+          </div>
+        </>
+      )}
+      {type === 'currency' && (
+        <>
+          <div className="menu-label">Currency</div>
+          <div className="menu-chips">
+            {CURRENCIES.map((cur) => (
+              <button key={cur} className={(style?.currency ?? 'USD') === cur ? 'active' : ''} onClick={run(() => actions.style({ currency: cur }, true))}>
+                {cur}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {type === 'date' && (
+        <>
+          <div className="menu-label">Date format</div>
+          <div className="menu-chips">
+            {DATE_FORMATS.map((f) => (
+              <button key={f.value} className={(style?.dateFormat ?? 'medium') === f.value ? 'active' : ''} onClick={run(() => actions.style({ dateFormat: f.value }, true))}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="menu-label">Alignment</div>
       <div className="menu-row">
         {(['left', 'center', 'right'] as const).map((a) => (
@@ -357,12 +553,12 @@ function TableMenu({
         ))}
       </div>
       <div className="menu-sep" />
-      <button onClick={run(actions.clear)}>Clear Cell</button>
+      <button onClick={run(actions.clear)}>{multi ? 'Clear Cells' : 'Clear Cell'}</button>
       <button className="danger" onClick={run(actions.removeRow)}>
-        Delete Row
+        {multi ? 'Delete Rows' : 'Delete Row'}
       </button>
       <button className="danger" onClick={run(actions.removeCol)}>
-        Delete Column
+        {multi ? 'Delete Columns' : 'Delete Column'}
       </button>
     </div>,
     document.body,

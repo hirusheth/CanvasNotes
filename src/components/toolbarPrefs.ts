@@ -18,6 +18,9 @@ export const ALL_TOOL_IDS = [
   'video',
   'audio',
   'map',
+  'folder',
+  'imageSearch',
+  'aiIdeas',
 ] as const;
 
 export type ToolId = (typeof ALL_TOOL_IDS)[number];
@@ -40,9 +43,12 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   video: 'Video',
   audio: 'Audio',
   map: 'Map',
+  folder: 'Folder',
+  imageSearch: 'Find image',
+  aiIdeas: 'AI Ideas',
 };
 
-const DEFAULT_HIDDEN: ToolId[] = ['heading', 'video', 'audio', 'map'];
+const DEFAULT_HIDDEN: ToolId[] = ['heading', 'video', 'audio', 'map', 'folder', 'aiIdeas'];
 const KEY = 'cn:toolbar';
 const listeners = new Set<() => void>();
 

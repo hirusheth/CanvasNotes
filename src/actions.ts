@@ -16,6 +16,7 @@ import {
 } from './store';
 import { COLUMN_CHILD_TYPES, DEFAULT_WIDTH, type El, type ElementType } from './types';
 import { allRects, contains, viewCenter } from './viewport';
+import { importSpreadsheet, isSpreadsheet } from './moreActions';
 
 export interface Placement {
   x: number;
@@ -111,6 +112,10 @@ function imageRatio(src: string): Promise<number | undefined> {
 }
 
 export async function addFiles(files: File[], at: Placement = centerPlacement()) {
+  // CSV, TSV and Excel files become table cards (Milanote's spreadsheet import).
+  const sheets = files.filter(isSpreadsheet);
+  for (const sheet of sheets) await importSpreadsheet(sheet, at);
+  files = files.filter((f) => !sheets.includes(f));
   if (files.length === 0) return;
   toast(`Uploading ${files.length} file${files.length === 1 ? '' : 's'}…`);
   const created: El[] = [];

@@ -1,5 +1,6 @@
 // Turns links from video, audio and map services into embeddable players,
 // like Milanote's Video / Audio / Map link cards.
+import type { MediaOptions } from './types';
 
 export interface Embed {
   src: string;
@@ -9,7 +10,38 @@ export interface Embed {
   height?: number;
 }
 
-export function embedFor(raw: string): Embed | null {
+// Start/end/loop/autoplay options become each provider's player parameters.
+export function embedFor(raw: string, media?: MediaOptions): Embed | null {
+  const embed = baseEmbed(raw);
+  if (!embed || !media || embed.kind === 'map') return embed;
+  const url = new URL(embed.src);
+  const { start, end, loop, autoplay } = media;
+  if (url.hostname.includes('youtube')) {
+    const id = url.pathname.split('/').pop() ?? '';
+    if (start) url.searchParams.set('start', String(Math.floor(start)));
+    if (end) url.searchParams.set('end', String(Math.floor(end)));
+    if (loop) {
+      url.searchParams.set('loop', '1');
+      url.searchParams.set('playlist', id);
+    }
+    if (autoplay) {
+      url.searchParams.set('autoplay', '1');
+      url.searchParams.set('mute', '1');
+    }
+  } else if (url.hostname.includes('vimeo')) {
+    if (loop) url.searchParams.set('loop', '1');
+    if (autoplay) {
+      url.searchParams.set('autoplay', '1');
+      url.searchParams.set('muted', '1');
+    }
+    if (start) url.hash = `t=${Math.floor(start)}s`;
+  } else if (url.hostname.includes('soundcloud') || url.hostname.includes('spotify')) {
+    if (autoplay) url.searchParams.set('auto_play', 'true');
+  }
+  return { ...embed, src: url.toString() };
+}
+
+function baseEmbed(raw: string): Embed | null {
   let url: URL;
   try {
     url = new URL(raw);

@@ -24,6 +24,20 @@ import {
   setLocked,
 } from '../actions';
 import { openDrawing } from '../elements/Sketch';
+import {
+  REACTIONS,
+  attachComment,
+  convertToSketch,
+  createSyncedCopy,
+  cropToGrid,
+  exportElement,
+  newFolder,
+  newPlaceholder,
+  toggleReaction,
+  unsync,
+} from '../moreActions';
+import { uid } from '../store';
+import type { MediaOptions } from '../types';
 import { convertToTemplate, timeAgo } from './Panels';
 
 export interface MenuState {
@@ -34,6 +48,12 @@ export interface MenuState {
 }
 
 const COLORABLE = new Set<ElementType>(['note', 'column', 'board', 'todo', 'line', 'link', 'file', 'heading', 'table', 'document', 'comment', 'sketch']);
+
+// How many pointers are down right now (to tell whether a menu opened mid-press).
+let pointersDown = 0;
+window.addEventListener('pointerdown', () => pointersDown++, true);
+window.addEventListener('pointerup', () => (pointersDown = Math.max(0, pointersDown - 1)), true);
+window.addEventListener('pointercancel', () => (pointersDown = Math.max(0, pointersDown - 1)), true);
 
 export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -46,19 +66,31 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
     setPos({ x: Math.max(8, Math.min(menu.x, window.innerWidth - r.width - 8)), y: Math.max(8, Math.min(menu.y, window.innerHeight - r.height - 8)) });
   }, [menu, sub]);
 
+  // A menu opened by a long press must survive the finger lifting: the browser
+  // follows the release with a compatibility click and a window blur.
+  const releasedAt = useRef(pointersDown > 0 ? 0 : Date.now());
   useEffect(() => {
+    const settled = () => releasedAt.current > 0 && Date.now() - releasedAt.current > 350;
     const close = (e: Event) => {
       if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
-      onClose();
+      if (settled()) onClose();
     };
+    const up = () => {
+      if (!releasedAt.current) releasedAt.current = Date.now();
+    };
+    const blur = () => settled() && onClose();
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('pointerdown', close, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
     window.addEventListener('keydown', esc);
-    window.addEventListener('blur', onClose);
+    window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
       window.removeEventListener('keydown', esc);
-      window.removeEventListener('blur', onClose);
+      window.removeEventListener('blur', blur);
     };
   }, [onClose]);
 
@@ -110,6 +142,8 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
         <Item onClick={addAt('comment')}>New Comment</Item>
         <Item onClick={addAt('link')}>New Link</Item>
         <Item onClick={addAt('line')}>New Line</Item>
+        <Item onClick={() => newFolder({ x: menu.world!.x, y: menu.world!.y })}>New Folder</Item>
+        <Item onClick={() => newPlaceholder({ x: menu.world!.x, y: menu.world!.y })}>New Image/File Placeholder</Item>
         <Sub id="more-new" label="More">
           <Item onClick={addAt('heading')}>New Heading</Item>
           <Item onClick={addAt('document')}>New Document</Item>
@@ -118,6 +152,8 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           <Item onClick={addAt('link', 'video')}>New Video</Item>
           <Item onClick={addAt('link', 'audio')}>New Audio</Item>
           <Item onClick={addAt('link', 'map')}>New Map</Item>
+          <Item onClick={() => setState({ modal: { kind: 'imageSearch', at: { x: menu.world!.x, y: menu.world!.y } } })}>Search Images…</Item>
+          <Item onClick={() => setState({ modal: { kind: 'aiIdeas', at: { x: menu.world!.x, y: menu.world!.y } } })}>AI Ideas…</Item>
         </Sub>
         <div className="menu-sep" />
         <Item onClick={() => pasteInternal({ x: menu.world!.x, y: menu.world!.y }) || void 0} kbd="Ctrl V">
@@ -188,6 +224,16 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           </label>
         </div>
       )}
+      {colorable && targets.some((t) => t.color && t.color !== 'transparent' && t.type !== 'line' && t.type !== 'heading') && (
+        <div className="menu-row" title="Colour mode">
+          <button className={targets.every((t) => !t.colorStrip) ? 'active' : ''} onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { colorStrip: false }]))))}>
+            Background
+          </button>
+          <button className={targets.every((t) => t.colorStrip) ? 'active' : ''} onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { colorStrip: true }]))))}>
+            Top strip
+          </button>
+        </div>
+      )}
 
       {/* type-specific actions */}
       {single?.type === 'board' && (
@@ -198,6 +244,30 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           <Item onClick={() => createShortcut(single.id)}>Create a Shortcut to This Board</Item>
           <Item onClick={() => setState({ modal: { kind: 'icon', id: single.id } })}>Change Icon…</Item>
           <Item onClick={() => convertToTemplate(single.id)}>Convert to Template</Item>
+          {single.content.protected ? (
+            <>
+              {!single.content.unlocked && <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'unlock' } })}>Unlock Board…</Item>}
+              <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'remove' } })}>Remove Password…</Item>
+            </>
+          ) : (
+            <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'set' } })}>Password Protect…</Item>
+          )}
+          {single.content.publicToken ? (
+            <>
+              <Item onClick={() => copyText(`${location.origin}/p/${single.content.publicToken}`, 'Read-only link copied')}>Copy Read-only Link</Item>
+              <Item onClick={() => patchElements({ [single.id]: { content: { publicToken: null } } })}>Unpublish</Item>
+            </>
+          ) : (
+            <Item
+              onClick={() => {
+                const token = uid() + uid();
+                patchElements({ [single.id]: { content: { publicToken: token } } });
+                copyText(`${location.origin}/p/${token}`, 'Published — read-only link copied');
+              }}
+            >
+              Publish Read-only Link
+            </Item>
+          )}
         </>
       )}
       {single?.type === 'alias' && (
@@ -223,13 +293,30 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           {single.type === 'line' ? 'Edit Label' : single.type === 'board' ? 'Rename' : 'Edit'}
         </Item>
       )}
-      {single?.type === 'sketch' && <Item onClick={() => openDrawing(single.id)}>Edit Drawing</Item>}
+      {single?.type === 'sketch' && (
+        <>
+          <Item onClick={() => openDrawing(single.id)}>Edit Drawing</Item>
+          <Item onClick={() => exportElement(single.id)}>Download SVG</Item>
+        </>
+      )}
+      {single && (isVideoLink(single) || (single.type === 'file' && /^(video|audio)\//.test(single.content.mime))) && (
+        <Sub id="media" label="Video Options">
+          <MediaOptionsEditor
+            value={(single.content as { media?: MediaOptions }).media ?? {}}
+            onChange={(media) => patchElements({ [single.id]: { content: { media } } })}
+          />
+        </Sub>
+      )}
       {single?.type === 'document' && <Item onClick={() => setState({ modal: { kind: 'document', id: single.id } })}>Open Document</Item>}
       {single?.type === 'image' && (
         <>
           <Item onClick={() => startEditing(single.id)}>Edit Caption</Item>
           <Item onClick={() => openDrawing(single.id)}>Draw On</Item>
           <Item onClick={() => void replaceImage(single.id)}>Replace Image</Item>
+          {single.content.src && <Item onClick={() => setState({ modal: { kind: 'crop', id: single.id } })}>Crop Image…</Item>}
+          {single.content.src && <Item onClick={() => cropToGrid(single.id)}>Crop Image to Fit Dot Grid</Item>}
+          {single.content.src && <Item onClick={() => convertToSketch(single.id)}>Convert to Sketch Card</Item>}
+          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>File Info</Item>
           <a className="menu-link" href={single.content.src} download onClick={onClose}>
             Download Original Image
           </a>
@@ -239,6 +326,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       {single?.type === 'file' && (
         <>
           <Item onClick={() => window.open(single.content.src, '_blank', 'noopener')}>Open File</Item>
+          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>File Info</Item>
           <a className="menu-link" href={single.content.src} download={single.content.name} onClick={onClose}>
             Download
           </a>
@@ -267,6 +355,21 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
         <Item onClick={() => setState({ captionEditId: single.id, selection: [single.id] })}>{single.caption ? 'Edit Description' : 'Add Description'}</Item>
       )}
       {cards.length > 0 && <Item onClick={() => setState({ modal: { kind: 'labels', ids: cards.map((c) => c.id) } })}>Labels…</Item>}
+      {cards.length > 0 && (
+        <Sub id="reactions" label="Reactions">
+          <div className="menu-row reactions-pick">
+            {REACTIONS.map((r) => (
+              <button key={r} className={cards.every((c) => c.reactions?.includes(r)) ? 'active' : ''} onClick={run(() => toggleReaction(cards.map((c) => c.id), r))}>
+                {r}
+              </button>
+            ))}
+          </div>
+        </Sub>
+      )}
+      {single && single.type !== 'line' && single.type !== 'comment' && <Item onClick={() => attachComment(single.id)}>Add Comment</Item>}
+      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => createSyncedCopy(single.id)}>Create Synced Copy</Item>}
+      {single?.syncId && <Item onClick={() => unsync(single.id)}>Stop Syncing This Copy</Item>}
+      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => exportElement(single.id)}>Export…</Item>}
       {single && ['note', 'document', 'todo', 'heading'].includes(single.type) && (
         <Sub id="convert" label="Convert to">
           {single.type !== 'note' && <Item onClick={() => convertElement(single.id, 'note')}>Convert to Note</Item>}
@@ -395,3 +498,51 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
     </div>
   );
 }
+
+function isVideoLink(el: El) {
+  return el.type === 'link' && !!el.content.url && /youtu|vimeo|loom|spotify|soundcloud/.test(el.content.url);
+}
+
+function parseTime(text: string): number | null {
+  const t = text.trim();
+  if (!t) return null;
+  const parts = t.split(':').map(Number);
+  if (parts.some((n) => Number.isNaN(n))) return null;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+}
+
+function fmtTime(sec?: number | null) {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Keeps its own state: the menu itself doesn't re-render when the card changes.
+function MediaOptionsEditor({ value, onChange }: { value: MediaOptions; onChange(v: MediaOptions): void }) {
+  const [start, setStart] = useState(fmtTime(value.start));
+  const [end, setEnd] = useState(fmtTime(value.end));
+  const [flags, setFlags] = useState({ loop: !!value.loop, autoplay: !!value.autoplay });
+  const save = (patch: Partial<MediaOptions>) => {
+    const next = { ...flags, ...patch } as { loop: boolean; autoplay: boolean };
+    setFlags({ loop: next.loop, autoplay: next.autoplay });
+    onChange({ ...value, start: parseTime(start), end: parseTime(end), loop: next.loop, autoplay: next.autoplay });
+  };
+  return (
+    <div className="media-options" onPointerDown={(e) => e.stopPropagation()}>
+      <label>
+        Start <input value={start} placeholder="0:00" onChange={(e) => setStart(e.target.value)} onBlur={() => save({})} />
+      </label>
+      <label>
+        End <input value={end} placeholder="end" onChange={(e) => setEnd(e.target.value)} onBlur={() => save({})} />
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={flags.loop} onChange={(e) => save({ loop: e.target.checked })} /> Loop
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={flags.autoplay} onChange={(e) => save({ autoplay: e.target.checked })} /> Autoplay (muted)
+      </label>
+    </div>
+  );
+}
+

@@ -1,12 +1,12 @@
 import { useEffect, useReducer, useState } from 'react';
-import { useEditor, EditorContent, type Editor, Node, Mark, mergeAttributes, wrappingInputRule } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor, Node, Mark, Extension, mergeAttributes, wrappingInputRule } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
-import { TextStyle, Color } from '@tiptap/extension-text-style';
+import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style';
 import { setState } from '../store';
 
 // "! " at the start of a line makes a callout box, as in Milanote.
@@ -28,9 +28,52 @@ const SmallText = Mark.create({
   renderHTML: ({ HTMLAttributes }) => ['small', HTMLAttributes, 0],
 });
 
+// Paragraph and heading indent (Milanote's "Text indent"), outside of lists.
+const ParagraphIndent = Extension.create({
+  name: 'paragraphIndent',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          indent: {
+            default: 0,
+            parseHTML: (el) => Number(el.getAttribute('data-indent')) || 0,
+            renderHTML: (attrs) => (attrs.indent ? { 'data-indent': attrs.indent, style: `margin-left: ${attrs.indent * 1.5}em` } : {}),
+          },
+        },
+      },
+    ];
+  },
+});
+
+function changeIndent(editor: Editor, delta: number) {
+  const type = editor.isActive('heading') ? 'heading' : 'paragraph';
+  const current = Number(editor.getAttributes(type).indent) || 0;
+  editor.chain().focus().updateAttributes(type, { indent: Math.max(0, Math.min(6, current + delta)) }).run();
+}
+
+const FONTS = [
+  { label: 'Default', value: null },
+  { label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
+  { label: 'Mono', value: 'ui-monospace, Menlo, Consolas, monospace' },
+  { label: 'Rounded', value: '"Nunito", "Varela Round", ui-rounded, system-ui, sans-serif' },
+  { label: 'Handwritten', value: '"Bradley Hand", "Segoe Print", "Comic Sans MS", cursive' },
+];
+const SIZES = [null, '12px', '14px', '16px', '20px', '24px', '32px'];
+
 export const TEXT_COLORS = ['#24262b', '#7a7f89', '#d6455d', '#e06f1f', '#b08800', '#2a9467', '#2f7fcc', '#7a5ad6'];
 export const HIGHLIGHTS = ['#ffe066', '#ffc9a8', '#ffc2cf', '#d9ccff', '#bfe0ff', '#bdf0d6'];
 const EMOJIS = '😀 😂 😍 🤔 😎 😢 👍 👎 🙏 👏 🎉 🔥 ⭐ ✅ ❌ ⚠️ ❗ ❓ 💡 📌 📎 📝 📅 ⏰ 💬 ❤️ 💯 🚀 🎯 🏁'.split(' ');
+
+// Keys typed while a note is opening for editing (focus still on the page) are
+// buffered until its editor exists, then inserted directly. Each key arrives once.
+let pendingKeys = '';
+let insertIntoActive: ((text: string) => void) | null = null;
+export function bufferPendingKey(key: string) {
+  if (insertIntoActive) insertIntoActive(key);
+  else pendingKeys += key;
+}
 
 export function RichText({
   html,
@@ -60,9 +103,23 @@ export function RichText({
       Color,
       Callout,
       SmallText,
+      FontFamily,
+      FontSize,
+      ParagraphIndent,
     ],
     content: html,
     autofocus: autofocus ? 'end' : false,
+    // Keys typed in the moment before the editor existed are replayed into it.
+    onCreate: ({ editor }) => {
+      insertIntoActive = (text) => editor.chain().focus('end').insertContent(text).run();
+      const pending = pendingKeys;
+      pendingKeys = '';
+      if (pending) insertIntoActive(pending);
+    },
+    onDestroy: () => {
+      insertIntoActive = null;
+      pendingKeys = '';
+    },
     editorProps: {
       attributes: { class: 'rich-text', spellcheck: 'true' },
       handleKeyDown: (_view, event) => {
@@ -82,8 +139,8 @@ export function RichText({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || !editor.isFocused) return;
       const type = editor.isActive('taskItem') ? 'taskItem' : editor.isActive('listItem') ? 'listItem' : null;
-      if (!type) return;
       e.preventDefault();
+      if (!type) return changeIndent(editor, e.shiftKey ? -1 : 1);
       if (e.shiftKey) editor.chain().focus().liftListItem(type).run();
       else editor.chain().focus().sinkListItem(type).run();
     };
@@ -100,7 +157,7 @@ export function RichText({
   );
 }
 
-type Pop = null | 'style' | 'color' | 'emoji' | 'align';
+type Pop = null | 'style' | 'color' | 'emoji' | 'align' | 'font';
 
 function FormatBar({ editor }: { editor: Editor }) {
   // Re-render on every transaction so active states stay current.
@@ -169,6 +226,36 @@ function FormatBar({ editor }: { editor: Editor }) {
           </div>
         )}
       </div>
+      <div className="fb-pop-anchor">
+        {btn('Aa', 'Font and size', pop === 'font', () => toggle('font'))}
+        {pop === 'font' && (
+          <div className="fb-pop fb-fonts">
+            <div className="menu-label">Font</div>
+            {FONTS.map((f) => (
+              <button
+                key={f.label}
+                style={f.value ? { fontFamily: f.value } : undefined}
+                className={(editor.getAttributes('textStyle').fontFamily ?? null) === f.value ? 'active' : ''}
+                onMouseDown={(e) => (e.preventDefault(), f.value ? chain().setFontFamily(f.value).run() : chain().unsetFontFamily().run())}
+              >
+                {f.label}
+              </button>
+            ))}
+            <div className="menu-label">Size</div>
+            <div className="fb-row">
+              {SIZES.map((size) => (
+                <button
+                  key={size ?? 'auto'}
+                  className={(editor.getAttributes('textStyle').fontSize ?? null) === size ? 'active' : ''}
+                  onMouseDown={(e) => (e.preventDefault(), size ? chain().setFontSize(size).run() : chain().unsetFontSize().run())}
+                >
+                  {size ? parseInt(size) : 'Auto'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       {btn('B', 'Bold (Ctrl B)', editor.isActive('bold'), () => chain().toggleBold().run(), 'fb-bold')}
       {btn('I', 'Italic (Ctrl I)', editor.isActive('italic'), () => chain().toggleItalic().run(), 'fb-italic')}
       {btn('U', 'Underline (Ctrl U)', editor.isActive('underline'), () => chain().toggleUnderline().run(), 'fb-underline')}
@@ -200,12 +287,14 @@ function FormatBar({ editor }: { editor: Editor }) {
       {btn('1.', 'Numbered list (1. space)', editor.isActive('orderedList'), () => chain().toggleOrderedList().run())}
       {btn('☐', 'Checklist ([] space)', editor.isActive('taskList'), () => chain().toggleTaskList().run())}
       {btn('⇥', 'Indent (Tab)', false, () => {
-        const type = editor.isActive('taskItem') ? 'taskItem' : 'listItem';
-        chain().sinkListItem(type).run();
+        const type = editor.isActive('taskItem') ? 'taskItem' : editor.isActive('listItem') ? 'listItem' : null;
+        if (type) chain().sinkListItem(type).run();
+        else changeIndent(editor, 1);
       })}
       {btn('⇤', 'Un-indent (Shift Tab)', false, () => {
-        const type = editor.isActive('taskItem') ? 'taskItem' : 'listItem';
-        chain().liftListItem(type).run();
+        const type = editor.isActive('taskItem') ? 'taskItem' : editor.isActive('listItem') ? 'listItem' : null;
+        if (type) chain().liftListItem(type).run();
+        else changeIndent(editor, -1);
       })}
       <div className="fb-pop-anchor">
         {btn('≡', 'Alignment', pop === 'align', () => toggle('align'))}

@@ -7,6 +7,7 @@ import { wordCount } from '../elements/MoreBodies';
 import { downloadText, htmlToMarkdown, htmlToWordDoc, printHtml, safeFileName } from '../markdown';
 import { htmlToText, pickFiles } from '../actions';
 import * as api from '../api';
+import { AiIdeasModal, BoardPasswordModal, CropModal, FileInfoModal, ImageSearchModal } from './MoreModals';
 
 const close = () => setState({ modal: null });
 
@@ -24,6 +25,16 @@ export function ModalHost() {
       return <IconModal id={modal.id} />;
     case 'boardLink':
       return <BoardLinkModal onPick={modal.onPick} />;
+    case 'crop':
+      return <CropModal id={modal.id} />;
+    case 'fileInfo':
+      return <FileInfoModal id={modal.id} />;
+    case 'imageSearch':
+      return <ImageSearchModal at={modal.at} />;
+    case 'aiIdeas':
+      return <AiIdeasModal at={modal.at} />;
+    case 'boardPassword':
+      return <BoardPasswordModal id={modal.id} mode={modal.mode} />;
   }
 }
 

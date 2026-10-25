@@ -28,6 +28,8 @@ export const ROOT_ID = 'root';
 export const LABELS_PARENT = '__labels';
 export const TEMPLATES_PARENT = '__templates';
 export const SYSTEM_PARENT = '__system';
+// Milanote's Quick notes: a holding area shared by every board.
+export const QUICK_PARENT = '__quick';
 
 export interface NoteContent {
   html: string;
@@ -40,6 +42,11 @@ export interface BoardContent {
   background?: string | null;
   hideGrid?: boolean;
   template?: boolean;
+  // Set by the server: the board has a password, and whether this browser unlocked it.
+  protected?: boolean;
+  unlocked?: boolean;
+  // Read-only public link token (published board).
+  publicToken?: string | null;
 }
 export interface AliasContent {
   boardId: string;
@@ -51,6 +58,8 @@ export interface HeadingContent {
 export interface ColumnContent {
   title: string;
   collapsed?: boolean;
+  // A folder is a column shown as a compact, collapsible folder card.
+  folder?: boolean;
 }
 export interface TodoItem {
   id: string;
@@ -73,6 +82,15 @@ export interface ImageContent {
   caption?: string;
   ratio?: number;
   annotation?: Stroke[];
+  // Visible part of the image as fractions of its natural size.
+  crop?: { x: number; y: number; w: number; h: number } | null;
+  attribution?: { label: string; url: string } | null;
+}
+export interface MediaOptions {
+  start?: number | null;
+  end?: number | null;
+  loop?: boolean;
+  autoplay?: boolean;
 }
 export interface LinkContent {
   url: string;
@@ -82,6 +100,7 @@ export interface LinkContent {
   site?: string | null;
   loading?: boolean;
   kind?: 'video' | 'audio' | 'map' | null;
+  media?: MediaOptions;
 }
 export interface LineEnd {
   id?: string | null;
@@ -105,10 +124,12 @@ export interface FileContent {
   name: string;
   size: number;
   mime: string;
+  media?: MediaOptions;
 }
 export interface SketchContent {
   strokes: Stroke[];
   ratio: number;
+  background?: string | null;
 }
 export type CellType = 'auto' | 'text' | 'number' | 'currency' | 'percentage' | 'checkbox' | 'date';
 export interface CellStyle {
@@ -116,6 +137,10 @@ export interface CellStyle {
   align?: 'left' | 'center' | 'right';
   bg?: string | null;
   bold?: boolean;
+  decimals?: number | null;
+  currency?: string;
+  dateFormat?: 'short' | 'medium' | 'long' | 'iso';
+  thousands?: boolean;
 }
 export interface TableContent {
   title: string;
@@ -177,6 +202,11 @@ export interface ElementOf<T extends ElementType> {
   caption?: string | null;
   labels?: string[];
   locked?: boolean;
+  // Synced copies share a syncId; editing one updates them all.
+  syncId?: string | null;
+  // Colour as a strip along the top instead of the whole background.
+  colorStrip?: boolean;
+  reactions?: string[];
   content: ContentByType[T];
   createdAt: number;
   updatedAt: number;
@@ -247,6 +277,7 @@ export const CARD_COLORS: { name: string; value: string | null }[] = [
   { name: 'Mint', value: 'mint' },
   { name: 'Sage', value: 'sage' },
   { name: 'Slate', value: 'slate' },
+  { name: 'Transparent', value: 'transparent' },
 ];
 
 export const LABEL_COLORS = ['#e0566f', '#f0803c', '#e0b100', '#2fae78', '#3a8fd9', '#8a6be0', '#67707e'];

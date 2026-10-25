@@ -17,10 +17,12 @@ import {
   undo,
   useStore,
   subscribeState,
+  loadPublic,
 } from './store';
 import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
+import { seedWelcomeBoard } from './moreActions';
 import { ExportPanel, InboxPanel, SearchPalette, SettingsPanel, ShortcutsPanel, TemplatesPanel, Toast, TrashPanel, markViewed } from './components/Panels';
 import { ModalHost } from './components/Modals';
 import { Presentation } from './components/Presentation';
@@ -42,6 +44,7 @@ import {
   fetchLinkPreview,
 } from './actions';
 import { openDrawing } from './elements/Sketch';
+import { bufferPendingKey } from './elements/RichText';
 import { allRects, fitRects, getViewport, setViewport, zoomAt } from './viewport';
 import type { El } from './types';
 
@@ -93,6 +96,8 @@ function onKeyDown(e: KeyboardEvent) {
   const key = e.key.toLowerCase();
 
   if (state.modal) return; // modals handle their own keys
+  // A published board can be searched and zoomed, nothing else.
+  if (state.readOnly && !(e.ctrlKey || e.metaKey) && !['Escape', '?'].includes(e.key) && !(e.shiftKey && e.code === 'Digit1')) return;
   if (mod && key === 'k' && !isTyping(e.target)) {
     e.preventDefault();
     setState({ panel: state.panel === 'search' ? null : 'search' });
@@ -124,6 +129,15 @@ function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (isTyping(e.target) || state.panel === 'search') return;
+  // While a card is opening for editing, keystrokes belong to it, not to the board's one-key shortcuts.
+  if (state.editingId && !mod && e.key !== 'Escape') {
+    const el = state.elements[state.editingId];
+    if (e.key.length === 1 && (el?.type === 'note' || el?.type === 'document')) {
+      e.preventDefault();
+      bufferPendingKey(e.key);
+    }
+    return;
+  }
 
   const { selection, boardId } = state;
   if (e.altKey && e.key === 'ArrowLeft') {
@@ -220,7 +234,7 @@ function onKeyDown(e: KeyboardEvent) {
 
 function onPaste(e: ClipboardEvent) {
   const state = getState();
-  if (isTyping(e.target) || state.panel || state.modal) return;
+  if (isTyping(e.target) || state.panel || state.modal || state.readOnly) return;
   const data = e.clipboardData;
   if (!data) return;
   const at = pastePlacement();
@@ -247,6 +261,7 @@ export function App() {
   const panel = useStore((s) => s.panel);
   const theme = useStore((s) => s.theme);
   const presenting = useStore((s) => s.presenting);
+  const readOnly = useStore((s) => s.readOnly);
   const boardId = useStore((s) => s.boardId);
   const boardTitle = useStore((s) => {
     const path = boardPath(s.boardId);
@@ -255,7 +270,13 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--ui-scale', localStorage.getItem('cn:ui-scale') || '1');
+    const publicToken = location.pathname.match(/^\/p\/([\w-]+)/)?.[1];
+    if (publicToken) {
+      void loadPublic(publicToken);
+      return;
+    }
     void load().then(() => {
+      if (getState().loaded && !getState().loadError) seedWelcomeBoard();
       // Finish link previews that were interrupted by a reload.
       for (const el of Object.values(getState().elements)) {
         if (el.type === 'link' && el.content.loading && el.content.url) void fetchLinkPreview(el.id, el.content.url);
@@ -290,13 +311,15 @@ export function App() {
   }
 
   return (
-    <div className={`app ${presenting ? 'presenting' : ''}`}>
+    <div className={`app ${presenting ? 'presenting' : ''} ${readOnly ? 'read-only' : ''}`}>
       {!presenting && <TopBar />}
+      {readOnly && <div className="readonly-banner">Read-only board · made with Canvas Notes</div>}
       <div className="main">
-        {!presenting && <Toolbar />}
+        {!presenting && !readOnly && <Toolbar />}
         {loaded ? <Canvas key={boardId} /> : <div className="splash">Loading…</div>}
         {panel === 'trash' && <TrashPanel />}
         {panel === 'inbox' && <InboxPanel />}
+        {panel === 'quick' && <InboxPanel scope="quick" />}
         {panel === 'export' && <ExportPanel />}
         {panel === 'templates' && <TemplatesPanel />}
         {panel === 'settings' && <SettingsPanel />}

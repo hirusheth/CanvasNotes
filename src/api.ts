@@ -17,6 +17,17 @@ export async function fetchState(): Promise<{ elements: El[]; auth: boolean }> {
   return { elements: data.elements, auth: !!data.auth };
 }
 
+export async function fetchPublic(token: string): Promise<{ board: string; elements: El[] }> {
+  return json(await fetch(`/api/public/${encodeURIComponent(token)}`));
+}
+
+export async function postJson<T = { ok: boolean }>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || `${res.status} ${res.statusText}`);
+  return data as T;
+}
+
 export async function logout(): Promise<void> {
   await fetch('/api/logout', { method: 'POST' });
   location.reload();

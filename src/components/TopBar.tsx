@@ -87,6 +87,12 @@ export function TopBar() {
             ⤢
           </button>
         </div>
+        <button className="icon-btn quick-btn" onClick={() => setState({ panel: getState().panel === 'quick' ? null : 'quick' })} title="Quick notes (from any device)">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M5 4h10l4 4v12H5z" />
+            <path d="M9 12h6M9 16h4M12 8v0" />
+          </svg>
+        </button>
         <button className="icon-btn hide-sm" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title="Export board">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />

@@ -111,6 +111,10 @@ export function Canvas() {
   });
   const [background, hideGrid] = appearance.split('|');
   const darkBackground = isDark(background);
+  const locked = useStore((s) => {
+    const b = s.elements[boardId];
+    return b?.type === 'board' && !!b.content.protected && !b.content.unlocked;
+  });
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -709,6 +713,7 @@ export function Canvas() {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (getState().readOnly) return;
     const p = screenToWorld(e.clientX, e.clientY);
     const column = computeDropTarget(p, ['__external__']);
     const at = { x: p.x, y: p.y, ...(column?.kind === 'column' ? { columnId: column.id, index: column.index } : {}) };
@@ -765,7 +770,17 @@ export function Canvas() {
           })}
           {marquee && <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
         </div>
-        {loaded && topLevel.length === 0 && <EmptyBoardHint />}
+        {loaded && topLevel.length === 0 && !locked && <EmptyBoardHint />}
+        {locked && (
+          <div className="lock-screen" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="lock-icon">🔒</div>
+            <h2>This board is password protected</h2>
+            <p>Enter password to view this board.</p>
+            <button className="primary" onClick={() => setState({ modal: { kind: 'boardPassword', id: boardId, mode: 'unlock' } })}>
+              Unlock board
+            </button>
+          </div>
+        )}
       </div>
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
       {!menu && <SelectionBar onMenu={setMenu} />}

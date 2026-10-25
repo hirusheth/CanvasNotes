@@ -15,7 +15,8 @@ import {
   dependents,
   uid,
 } from '../store';
-import { LABELS_PARENT, ROOT_ID, SYSTEM_PARENT, TEMPLATES_PARENT, type El, type ElementOf } from '../types';
+import { LABELS_PARENT, QUICK_PARENT, ROOT_ID, SYSTEM_PARENT, TEMPLATES_PARENT, type El, type ElementOf } from '../types';
+import { STARTER_TEMPLATES, applyStarterTemplate } from '../moreActions';
 import { plainText, columnAt, boardUrl, copyText } from '../actions';
 import { useLabels } from './Modals';
 import { isOverCanvas, screenToWorld, allRects, union, canvasRect } from '../viewport';
@@ -317,11 +318,13 @@ export function timeAgo(t: number) {
 
 // ---------------------------------------------------------------- unsorted (inbox)
 
-export function InboxPanel() {
+// "Unsorted" is per board; "Quick notes" is one inbox shared by every board.
+export function InboxPanel({ scope = 'board' }: { scope?: 'board' | 'quick' }) {
   const boardId = useStore((s) => s.boardId);
+  const holder = scope === 'quick' ? QUICK_PARENT : boardId;
   const key = useStore((s) =>
     Object.values(s.elements)
-      .filter((e) => e.section === 'inbox' && e.parentId === s.boardId)
+      .filter((e) => e.section === 'inbox' && e.parentId === (scope === 'quick' ? QUICK_PARENT : s.boardId))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((e) => e.id)
       .join(','),
@@ -337,7 +340,7 @@ export function InboxPanel() {
       .split('\n')
       .map((l) => `<p>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`)
       .join('');
-    addElements([makeElement('note', { section: 'inbox', content: { html } })], { select: false });
+    addElements([makeElement('note', { section: 'inbox', parentId: holder, content: { html } })], { select: false });
     setDraft('');
   };
 
@@ -363,6 +366,7 @@ export function InboxPanel() {
       const column = columnAt(p);
       patchElement(id, {
         section: 'canvas',
+        parentId: boardId,
         x: Math.round(p.x - 40),
         y: Math.round(p.y - 20),
         columnId: column?.id ?? null,
@@ -376,18 +380,22 @@ export function InboxPanel() {
   };
 
   return (
-    <aside className="side-panel inbox-panel" aria-label="Unsorted">
+    <aside className="side-panel inbox-panel" aria-label={scope === 'quick' ? 'Quick notes' : 'Unsorted'}>
       <div className="side-head">
-        <h2>Unsorted</h2>
+        <h2>{scope === 'quick' ? 'Quick notes' : 'Unsorted'}</h2>
         <button className="icon-btn" onClick={close} title="Close">
           ✕
         </button>
       </div>
-      <p className="side-sub">
-        A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> to send selected cards here.
-      </p>
+      {scope === 'quick' ? (
+        <p className="side-sub">Jot things down from any device — your phone included — and sort them onto a board later. Drag a note onto any board.</p>
+      ) : (
+        <p className="side-sub">
+          A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> to send selected cards here.
+        </p>
+      )}
       <div className="inbox-list scrollable">
-        {ids.length === 0 && <div className="trash-empty">Nothing unsorted on this board.</div>}
+        {ids.length === 0 && <div className="trash-empty">{scope === 'quick' ? 'No quick notes yet.' : 'Nothing unsorted on this board.'}</div>}
         {ids.map((id) => (
           <InboxCard key={id} id={id} onPointerDown={onPointerDown} dragging={ghost?.id === id} />
         ))}
@@ -430,7 +438,7 @@ function InboxCard({ id, onPointerDown, dragging }: { id: string; onPointerDown(
           onClick={() => {
             const r = canvasRect();
             const p = screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2);
-            patchElement(id, { section: 'canvas', x: Math.round(p.x - 130), y: Math.round(p.y - 60), columnId: null });
+            patchElement(id, { section: 'canvas', parentId: getState().boardId, x: Math.round(p.x - 130), y: Math.round(p.y - 60), columnId: null });
           }}
         >
           Add to board
@@ -542,6 +550,24 @@ export function TemplatesPanel() {
             <span className="board-icon small">▦</span> Empty board
           </button>
         </li>
+        {STARTER_TEMPLATES.filter((t) => t.title.toLowerCase().includes(query.toLowerCase())).map((t) => (
+          <li key={t.id}>
+            <button
+              className="template-row"
+              onClick={() => {
+                const r = canvasRect();
+                const p = screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2);
+                applyStarterTemplate(t.id, { x: p.x - 55, y: p.y - 50 }, keepContent);
+                close();
+              }}
+              title={t.description}
+            >
+              <span className="board-icon small">{t.icon}</span> {t.title}
+              <span className="label-chip small tag-top">Top pick</span>
+            </button>
+          </li>
+        ))}
+        <li className="template-group">Your custom templates</li>
         {shown.length === 0 && (
           <li className="trash-empty">{templates.length ? 'No templates found' : 'Right-click any board and choose “Convert to Template” to make your own.'}</li>
         )}
@@ -795,6 +821,9 @@ const SHORTCUT_SECTIONS: [string, [string, string][]][] = [
     'Drawing',
     [
       ['P / E', 'Pen / eraser'],
+      ['V', 'Switch to selection tool (drag to select, move, Delete)'],
+      ['I', 'Colour eyedropper'],
+      ['C', 'Toggle colour palette'],
       ['[ / ]', 'Change pen size'],
       ['X', 'Change to previous colour'],
       ['Esc or Ctrl S', 'Save current drawing'],

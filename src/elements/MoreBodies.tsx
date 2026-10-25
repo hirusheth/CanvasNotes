@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getState, patchElement, setState, startEditing, uid, useStore } from '../store';
+import { getState, patchElement, setState, startEditing, syncedCount, uid, useStore } from '../store';
 import { CAPTION_TYPES, type El, type ElementOf } from '../types';
 import { htmlToText } from '../actions';
 
@@ -196,10 +196,26 @@ export function CardExtras({ el }: { el: El }) {
   );
   const labels = labelKey ? labelKey.split(',').map((k) => getState().elements[k.split(':')[0]] as ElementOf<'label'>) : [];
   const editingCaption = useStore((s) => s.captionEditId === el.id);
+  const synced = useStore((s) => syncedCount(el.syncId, s.elements));
   const showCaption = CAPTION_TYPES.includes(el.type) && (el.caption || editingCaption);
-  if (!labels.length && !showCaption && !el.locked) return null;
+  const reactions = el.reactions ?? [];
+  if (!labels.length && !showCaption && !el.locked && synced < 2 && !reactions.length) return null;
   return (
     <>
+      {synced > 1 && (
+        <span className="sync-badge" title={`There are ${synced} synced copies of this card — editing one updates them all`}>
+          ⇄ {synced}
+        </span>
+      )}
+      {reactions.length > 0 && (
+        <div className="reaction-row" data-nodrag>
+          {reactions.map((r) => (
+            <button key={r} className="reaction" title="Remove reaction" onClick={() => patchElement(el.id, { reactions: reactions.filter((x) => x !== r) })}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
       {el.locked && (
         <span className="lock-badge" title="Position locked">
           🔒
