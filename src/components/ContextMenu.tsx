@@ -70,26 +70,40 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
   // A menu opened by a long press must survive the finger lifting: the browser
   // follows the release with a compatibility click and a window blur.
   const releasedAt = useRef(pointersDown > 0 ? 0 : Date.now());
+  const pressedInside = useRef(false);
   useEffect(() => {
     const settled = () => releasedAt.current > 0 && Date.now() - releasedAt.current > 350;
     const close = (e: Event) => {
-      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) {
+        pressedInside.current = true;
+        return;
+      }
       if (settled()) onClose();
     };
     const up = () => {
       if (!releasedAt.current) releasedAt.current = Date.now();
+    };
+    // The click that follows the long-press release can land on an item under the finger:
+    // ignore a click inside the menu that no press inside the menu started.
+    const swallow = (e: Event) => {
+      if (!pressedInside.current && !settled() && ref.current && e.target instanceof Node && ref.current.contains(e.target)) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
     };
     const blur = () => settled() && onClose();
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('pointerdown', close, true);
     window.addEventListener('pointerup', up, true);
     window.addEventListener('pointercancel', up, true);
+    window.addEventListener('click', swallow, true);
     window.addEventListener('keydown', esc);
     window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('pointerdown', close, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
+      window.removeEventListener('click', swallow, true);
       window.removeEventListener('keydown', esc);
       window.removeEventListener('blur', blur);
     };
