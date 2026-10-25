@@ -34,7 +34,8 @@ For development with hot reload: `npm run dev` (same port; Vite runs inside the 
 | `CANVASNOTES_PASSWORD` | unset | Turns on the sign-in page. **Required once it's reachable from other devices** |
 | `ANTHROPIC_API_KEY` | unset | Optional. Turns on **AI Ideas** (brainstorm cards with Claude) |
 
-The interface language (English, Español, Français, Português), number and date
+The interface language (English, Español, Français, Português, Deutsch,
+Italiano, Nederlands, Polski, Русский, 日本語, 中文, 한국어), number and date
 formats, the default currency and 12/24-hour time are set per device in
 **Settings → Localization**.
 
@@ -116,7 +117,10 @@ Right-click anything for its menu. `?` lists every shortcut.
 ## Checking it
 
 `npm run test:parity` drives the real app in headless Chrome and checks every
-feature in `docs/feature-parity.md` (75 checks, about 2½ minutes). Start a
+feature in `docs/feature-parity.md` (103 checks, about 4 minutes), including touch
+gestures in a phone-sized touch context and the hosted sign-in on a second,
+password-protected server it starts on port 5191. Run it with Node 22.5 or newer,
+like the server. Start a
 server with an empty `DATA_DIR` first, for example
 `DATA_DIR=/tmp/cn-test npm start`. It uses the system Chrome; set
 `CHROME_PATH` if yours is elsewhere, and `CANVASNOTES_URL` for another address.
