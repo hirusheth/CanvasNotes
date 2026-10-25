@@ -11,7 +11,8 @@
     "dev": "node server/index.mjs --dev",
     "build": "tsc --noEmit && vite build",
     "start": "node server/index.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:parity": "node tests/run-parity.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0"
@@ -31,6 +32,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "html-to-image": "^1.11.13",
+    "playwright-core": "^1.64.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
