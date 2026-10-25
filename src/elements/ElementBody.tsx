@@ -12,6 +12,7 @@ import { SketchView, StrokesSvg } from './Sketch';
 import { TableBody } from './Table';
 import { AliasBody, CommentBody, DocumentBody, HeadingBody } from './MoreBodies';
 import { embedFor, LINK_PLACEHOLDERS } from '../embeds';
+import { numLocale } from '../locale';
 
 interface BodyProps<T extends El['type']> {
   el: ElementOf<T>;
@@ -363,7 +364,7 @@ function DueDate({ item, editing, onChange }: { item: TodoItem; editing: boolean
   const d = new Date(`${item.due}T00:00:00`);
   return (
     <span className={`due-badge ${dueState(item.due!)}`} title={`Due ${d.toDateString()}`}>
-      Due {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      Due {d.toLocaleDateString(numLocale(), { month: 'short', day: 'numeric' })}
     </span>
   );
 }

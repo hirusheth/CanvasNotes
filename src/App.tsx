@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { onLocaleChange } from './locale';
 import {
   boardPath,
   commit,
@@ -261,6 +262,9 @@ export function App() {
   const panel = useStore((s) => s.panel);
   const theme = useStore((s) => s.theme);
   const presenting = useStore((s) => s.presenting);
+  // Re-render cards when number/date settings change.
+  const [localeVersion, setLocaleVersion] = useState(0);
+  useEffect(() => onLocaleChange(() => setLocaleVersion((v) => v + 1)), []);
   const readOnly = useStore((s) => s.readOnly);
   const boardId = useStore((s) => s.boardId);
   const boardTitle = useStore((s) => {
@@ -316,7 +320,7 @@ export function App() {
       {readOnly && <div className="readonly-banner">Read-only board · made with Canvas Notes</div>}
       <div className="main">
         {!presenting && !readOnly && <Toolbar />}
-        {loaded ? <Canvas key={boardId} /> : <div className="splash">Loading…</div>}
+        {loaded ? <Canvas key={`${boardId}:${localeVersion}`} /> : <div className="splash">Loading…</div>}
         {panel === 'trash' && <TrashPanel />}
         {panel === 'inbox' && <InboxPanel />}
         {panel === 'quick' && <InboxPanel scope="quick" />}

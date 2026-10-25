@@ -5,6 +5,7 @@ import * as api from '../api';
 import { addAiIdeas, insertSearchImage, type ImageResult } from '../moreActions';
 import { formatSize } from '../elements/ElementBody';
 import { timeAgo } from './Panels';
+import { hour12, numLocale } from '../locale';
 
 const close = () => setState({ modal: null });
 
@@ -131,7 +132,7 @@ export function FileInfoModal({ id }: { id: string }) {
     ['Type', el.type === 'file' ? el.content.mime : src.split('.').pop()?.toUpperCase() + ' image'],
     ['Size', el.type === 'file' ? formatSize(el.content.size) : bytes ? formatSize(bytes) : '…'],
     ...(dims ? ([['Dimensions', dims]] as [string, string][]) : []),
-    ['Added', `${new Date(el.createdAt).toLocaleString()} (${timeAgo(el.createdAt)})`],
+    ['Added', `${new Date(el.createdAt).toLocaleString(numLocale(), { hour12: hour12() })} (${timeAgo(el.createdAt)})`],
     ['Link', location.origin + src],
   ];
   return (

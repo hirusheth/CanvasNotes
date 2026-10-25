@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, type PointerEvent } from 'react';
+import { useMemo, useRef, useEffect, type PointerEvent, type MouseEvent } from 'react';
 import { getState, patchElement, startEditing, useStore } from '../store';
 import type { El, LineEnd, Rect } from '../types';
 import { getRect, useRectsVersion } from '../viewport';
@@ -61,9 +61,10 @@ interface Props {
   drag: DragState | null;
   onLinePointerDown(e: PointerEvent, line: El): void;
   onHandlePointerDown(e: PointerEvent, lineId: string, which: 'from' | 'to'): void;
+  onLineContextMenu(e: MouseEvent, line: El): void;
 }
 
-export function LinesLayer({ boardId, draft, drag, onLinePointerDown, onHandlePointerDown }: Props) {
+export function LinesLayer({ boardId, draft, drag, onLinePointerDown, onHandlePointerDown, onLineContextMenu }: Props) {
   useRectsVersion();
   const key = useStore((s) => linesKey(s, boardId));
   const selection = useStore((s) => s.selection);
@@ -90,7 +91,7 @@ export function LinesLayer({ boardId, draft, drag, onLinePointerDown, onHandlePo
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         return (
           <g key={line.id} className={`line ${selected ? 'selected' : ''} ${line.color ? `stroke-${line.color}` : ''}`} data-line={line.id}>
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="line-hit" onPointerDown={(e) => onLinePointerDown(e, line)} onDoubleClick={(e) => { e.stopPropagation(); startEditing(line.id); }} />
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="line-hit" onPointerDown={(e) => onLinePointerDown(e, line)} onContextMenu={(e) => onLineContextMenu(e, line)} onDoubleClick={(e) => { e.stopPropagation(); startEditing(line.id); }} />
             <line
               x1={a.x}
               y1={a.y}
@@ -106,7 +107,7 @@ export function LinesLayer({ boardId, draft, drag, onLinePointerDown, onHandlePo
               <LabelEditor line={line} at={mid} />
             ) : (
               label && (
-                <text x={mid.x} y={mid.y} className="line-label" textAnchor="middle" dominantBaseline="central" paintOrder="stroke" onPointerDown={(e) => onLinePointerDown(e, line)}>
+                <text x={mid.x} y={mid.y} className="line-label" textAnchor="middle" dominantBaseline="central" paintOrder="stroke" onPointerDown={(e) => onLinePointerDown(e, line)} onContextMenu={(e) => onLineContextMenu(e, line)}>
                   {label}
                 </text>
               )

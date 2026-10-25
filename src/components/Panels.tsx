@@ -23,6 +23,7 @@ import { isOverCanvas, screenToWorld, allRects, union, canvasRect } from '../vie
 import { exportBoardMarkdown, exportBoardPng, exportBoardText, exportBoardWord } from '../exporters';
 import { ElementBody } from '../elements/ElementBody';
 import { getToolbarPrefs, setToolbarPrefs, ALL_TOOL_IDS, TOOL_LABELS } from './toolbarPrefs';
+import { CURRENCY_OPTIONS, FORMAT_OPTIONS, getLocaleSettings, numLocale, setLocaleSettings, type LocaleSettings } from '../locale';
 
 export const TYPE_LABEL: Record<El['type'], string> = {
   note: 'Note',
@@ -313,7 +314,7 @@ export function timeAgo(t: number) {
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return new Date(t).toLocaleDateString();
+  return new Date(t).toLocaleDateString(numLocale());
 }
 
 // ---------------------------------------------------------------- unsorted (inbox)
@@ -646,6 +647,11 @@ export function SettingsPanel() {
   const theme = useStore((s) => s.theme);
   const board = useStore((s) => s.elements[boardId]);
   const [prefs, setPrefs] = useState(getToolbarPrefs());
+  const [loc, setLoc] = useState(getLocaleSettings());
+  const updateLoc = (patch: Partial<LocaleSettings>) => {
+    setLocaleSettings(patch);
+    setLoc(getLocaleSettings());
+  };
   const [scale, setScale] = useState(() => Number(localStorage.getItem('cn:ui-scale') || 1));
   const appearance = board?.type === 'board' ? board.content : { background: null, hideGrid: false };
 
@@ -689,6 +695,43 @@ export function SettingsPanel() {
           Interface size
           <input type="range" min="0.8" max="1.4" step="0.1" value={scale} onChange={(e) => applyScale(Number(e.target.value))} />
           <span>{Math.round(scale * 100)}%</span>
+        </label>
+      </div>
+      <div className="export-section">
+        <h3>Localization</h3>
+        <label className="field">
+          Language
+          <select value="en" disabled title="The interface is in English">
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label className="field">
+          Numbers &amp; dates (in tables)
+          <select value={loc.format} onChange={(e) => updateLoc({ format: e.target.value })}>
+            {FORMAT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Currency
+          <select value={loc.currency} onChange={(e) => updateLoc({ currency: e.target.value })}>
+            {CURRENCY_OPTIONS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Time
+          <select value={loc.time} onChange={(e) => updateLoc({ time: e.target.value as LocaleSettings['time'] })}>
+            <option value="">Follow the format above</option>
+            <option value="12">12 hour (e.g. 10:10pm)</option>
+            <option value="24">24 hour (e.g. 22:10)</option>
+          </select>
         </label>
       </div>
       <div className="export-section">

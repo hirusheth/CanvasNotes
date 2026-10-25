@@ -530,7 +530,12 @@ export function Canvas() {
         const startRects = drag?.startRects ?? new Map(g.ids.map((id) => [id, allRects().get(id) ?? lineBox(getState().elements[id]) ?? { x: 0, y: 0, w: 0, h: 0 }]));
         const dx = p.x - g.startWorld.x;
         const dy = p.y - g.startWorld.y;
-        setDrag({ ids: g.ids, dx, dy, startRects, target: computeDropTarget(p, g.ids) });
+        // Dropping on a breadcrumb moves the cards up to that board (Milanote does this too).
+        const crumb = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-crumb]');
+        document.querySelectorAll('.crumb.drop-target').forEach((n) => n !== crumb && n.classList.remove('drop-target'));
+        crumb?.classList.add('drop-target');
+        const target: DropTarget | null = crumb ? { kind: 'board', id: crumb.dataset.crumb! } : computeDropTarget(p, g.ids);
+        setDrag({ ids: g.ids, dx, dy, startRects, target });
         break;
       }
       case 'resize': {
@@ -638,6 +643,7 @@ export function Canvas() {
           } else if (!g.shift) setState({ selection: [g.id] });
         }
         setDrag(null);
+        document.querySelectorAll('.crumb.drop-target').forEach((n) => n.classList.remove('drop-target'));
         break;
       }
       case 'line-new': {
@@ -754,7 +760,7 @@ export function Canvas() {
         onDrop={onDrop}
       >
         <div ref={worldRef} className="world" style={{ transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})` }}>
-          <LinesLayer boardId={boardId} draft={lineDraft} drag={drag} onLinePointerDown={onLinePointerDown} onHandlePointerDown={onLineHandleDown} />
+          <LinesLayer boardId={boardId} draft={lineDraft} drag={drag} onLinePointerDown={onLinePointerDown} onHandlePointerDown={onLineHandleDown} onLineContextMenu={onItemContextMenu} />
           {topLevel.map((id) => (
             <ItemFrame key={id} id={id} />
           ))}

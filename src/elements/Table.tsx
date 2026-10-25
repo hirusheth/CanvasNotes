@@ -4,6 +4,7 @@ import { patchElement, startEditing, toast } from '../store';
 import type { CellStyle, CellType, ElementOf, TableContent } from '../types';
 import { colName, evaluateGrid, FORMULA_MESSAGES, type Evaluated } from '../formula';
 import { parseDelimited } from '../moreActions';
+import { defaultCurrency, hour12, numLocale } from '../locale';
 
 const CELL_TYPES: { value: CellType; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -45,16 +46,16 @@ export function formatValue(v: Evaluated, style: CellStyle | undefined, raw: str
     const grouping = style?.thousands === false ? { useGrouping: false } : {};
     switch (type) {
       case 'currency':
-        return value.toLocaleString(undefined, { style: 'currency', currency: style?.currency || 'USD', ...digits, ...grouping });
+        return value.toLocaleString(numLocale(), { style: 'currency', currency: style?.currency || defaultCurrency(), ...digits, ...grouping });
       case 'percentage':
-        return value.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 2, ...digits, ...grouping });
+        return value.toLocaleString(numLocale(), { style: 'percent', maximumFractionDigits: 2, ...digits, ...grouping });
       case 'number':
-        return value.toLocaleString(undefined, { maximumFractionDigits: 6, ...digits, ...grouping });
+        return value.toLocaleString(numLocale(), { maximumFractionDigits: 6, ...digits, ...grouping });
       case 'text':
       case 'date':
         return raw;
       default:
-        return raw.startsWith('=') || decimals !== undefined ? value.toLocaleString(undefined, { maximumFractionDigits: 6, ...digits, ...grouping }) : raw.trim();
+        return raw.startsWith('=') || decimals !== undefined ? value.toLocaleString(numLocale(), { maximumFractionDigits: 6, ...digits, ...grouping }) : raw.trim();
     }
   }
   if (type === 'date' && value) {
@@ -62,7 +63,11 @@ export function formatValue(v: Evaluated, style: CellStyle | undefined, raw: str
     if (!Number.isNaN(d.getTime())) {
       const fmt = style?.dateFormat ?? 'medium';
       if (fmt === 'iso') return d.toISOString().slice(0, 10);
-      return d.toLocaleDateString(undefined, fmt === 'short' ? { dateStyle: 'short' } : fmt === 'long' ? { dateStyle: 'full' } : { dateStyle: 'medium' });
+      const hasTime = /\d{1,2}:\d{2}/.test(String(value));
+      const dateStyle = fmt === 'short' ? 'short' : fmt === 'long' ? 'full' : 'medium';
+      return hasTime
+        ? d.toLocaleString(numLocale(), { dateStyle, timeStyle: 'short', hour12: hour12() })
+        : d.toLocaleDateString(numLocale(), { dateStyle });
     }
   }
   return String(value);
@@ -251,8 +256,9 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
     });
   };
   // Style the selected block, or the whole column for cell types and formats.
-  const styleCells = (patch: Partial<CellStyle>, wholeColumn = false) => {
-    const rg = selection() ?? { r1: 0, c1: 0, r2: 0, c2: 0 };
+  // Style a block of cells (the right-clicked cell or the selection), or whole columns.
+  const styleCells = (patch: Partial<CellStyle>, wholeColumn = false, target?: Range) => {
+    const rg = target ?? selection() ?? { r1: 0, c1: 0, r2: 0, c2: 0 };
     const next = { ...styles };
     for (let c = rg.c1; c <= rg.c2; c++) {
       const rows = wholeColumn ? cells.map((_, i) => i) : Array.from({ length: rg.r2 - rg.r1 + 1 }, (_, i) => rg.r1 + i);
@@ -409,7 +415,7 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
               if (!copiedValues) return toast('Copy some cells first');
               pasteBlockAt(menu, copiedValues);
             },
-            style: (patch, col) => styleCells(patch, col),
+            style: (patch, col) => styleCells(patch, col, menuRange(menu)),
           }}
         />
       )}
@@ -516,7 +522,7 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
           <div className="menu-label">Currency</div>
           <div className="menu-chips">
             {CURRENCIES.map((cur) => (
-              <button key={cur} className={(style?.currency ?? 'USD') === cur ? 'active' : ''} onClick={run(() => actions.style({ currency: cur }, true))}>
+              <button key={cur} className={(style?.currency ?? defaultCurrency()) === cur ? 'active' : ''} onClick={run(() => actions.style({ currency: cur }, true))}>
                 {cur}
               </button>
             ))}

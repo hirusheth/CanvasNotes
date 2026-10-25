@@ -51,6 +51,7 @@ export function TopBar() {
             <span key={b.id} className="crumb-wrap">
               {i > 0 && <span className="crumb-sep">/</span>}
               <button
+                data-crumb={last ? undefined : b.id}
                 className={`crumb ${last ? 'current' : ''}`}
                 onClick={() => (last ? b.id !== ROOT_ID && setRenaming(true) : navigate(b.id))}
                 title={last && b.id !== ROOT_ID ? 'Rename board' : `Go to ${b.title}`}

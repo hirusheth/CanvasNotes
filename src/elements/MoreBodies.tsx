@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getState, patchElement, setState, startEditing, syncedCount, uid, useStore } from '../store';
 import { CAPTION_TYPES, type El, type ElementOf } from '../types';
 import { htmlToText } from '../actions';
+import { hour12, numLocale } from '../locale';
 
 const stopEditing = () => startEditing(null);
 
@@ -73,8 +74,8 @@ function timeLabel(t: number) {
   const d = new Date(t);
   const today = new Date();
   return d.toDateString() === today.toDateString()
-    ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    ? d.toLocaleTimeString(numLocale(), { hour: 'numeric', minute: '2-digit', hour12: hour12() })
+    : d.toLocaleDateString(numLocale(), { month: 'short', day: 'numeric' });
 }
 
 export function CommentBody({ el, editing }: { el: ElementOf<'comment'>; editing: boolean }) {
