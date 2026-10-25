@@ -291,7 +291,7 @@ export function DrawingModal({ id }: { id: string }) {
                 setSelected(new Set());
               }}
             >
-              Delete {selected.size}
+              {t('Delete {n}', { n: selected.size })}
             </button>
           )}
           <span className="fb-sep" />

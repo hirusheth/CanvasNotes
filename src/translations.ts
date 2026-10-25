@@ -595,6 +595,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Salvia",
     "Slate": "Pizarra",
     "Transparent": "Transparente",
+    "Link URL": "URL del enlace",
+    "Couldn't copy": "No se pudo copiar",
+    "Delete {n}": "Eliminar {n}",
   },
   fr: {
     "! space": "! espace",
@@ -1190,6 +1193,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Sauge",
     "Slate": "Ardoise",
     "Transparent": "Transparent",
+    "Link URL": "URL du lien",
+    "Couldn't copy": "Impossible de copier",
+    "Delete {n}": "Supprimer {n}",
   },
   pt: {
     "! space": "! espaço",
@@ -1785,6 +1791,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Salva",
     "Slate": "Ardósia",
     "Transparent": "Transparente",
+    "Link URL": "URL do link",
+    "Couldn't copy": "Não foi possível copiar",
+    "Delete {n}": "Eliminar {n}",
   },
   de: {
     "! space": "! Leertaste",
@@ -2380,6 +2389,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Salbei",
     "Slate": "Schiefer",
     "Transparent": "Transparent",
+    "Link URL": "Link-URL",
+    "Couldn't copy": "Kopieren nicht möglich",
+    "Delete {n}": "{n} löschen",
   },
   it: {
     "! space": "! spazio",
@@ -2975,6 +2987,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Salvia",
     "Slate": "Ardesia",
     "Transparent": "Trasparente",
+    "Link URL": "URL del link",
+    "Couldn't copy": "Impossibile copiare",
+    "Delete {n}": "Elimina {n}",
   },
   nl: {
     "! space": "! spatie",
@@ -3570,6 +3585,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Salie",
     "Slate": "Leisteen",
     "Transparent": "Transparant",
+    "Link URL": "Link-URL",
+    "Couldn't copy": "Kopiëren mislukt",
+    "Delete {n}": "{n} verwijderen",
   },
   pl: {
     "! space": "! spacja",
@@ -4165,6 +4183,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Szałwia",
     "Slate": "Łupek",
     "Transparent": "Przezroczysty",
+    "Link URL": "Adres linku",
+    "Couldn't copy": "Nie udało się skopiować",
+    "Delete {n}": "Usuń ({n})",
   },
   ru: {
     "! space": "! пробел",
@@ -4760,6 +4781,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "Шалфей",
     "Slate": "Сланцевый",
     "Transparent": "Прозрачный",
+    "Link URL": "Адрес ссылки",
+    "Couldn't copy": "Не удалось скопировать",
+    "Delete {n}": "Удалить ({n})",
   },
   ja: {
     "! space": "! スペース",
@@ -5355,6 +5379,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "セージ",
     "Slate": "スレート",
     "Transparent": "透明",
+    "Link URL": "リンク URL",
+    "Couldn't copy": "コピーできませんでした",
+    "Delete {n}": "{n} 件を削除",
   },
   zh: {
     "! space": "! 空格",
@@ -5950,6 +5977,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "鼠尾草绿",
     "Slate": "石板灰",
     "Transparent": "透明",
+    "Link URL": "链接网址",
+    "Couldn't copy": "无法复制",
+    "Delete {n}": "删除 {n} 项",
   },
   ko: {
     "! space": "! 스페이스",
@@ -6545,5 +6575,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "Sage": "세이지",
     "Slate": "슬레이트",
     "Transparent": "투명",
+    "Link URL": "링크 URL",
+    "Couldn't copy": "복사할 수 없습니다",
+    "Delete {n}": "{n}개 삭제",
   },
 };

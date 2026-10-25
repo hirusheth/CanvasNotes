@@ -312,7 +312,7 @@ function FormatBar({ editor }: { editor: Editor }) {
       <span className="fb-sep" />
       {btn('🔗', 'Hyperlink', editor.isActive('link'), () => {
         if (editor.isActive('link')) return chain().unsetLink().run();
-        const url = window.prompt('Link URL');
+        const url = window.prompt(t('Link URL'));
         if (url) chain().extendMarkRange('link').setLink({ href: /^[a-z]+:|^#/i.test(url) ? url : `https://${url}` }).run();
       })}
       {btn('▦', 'Link to board', false, () =>
