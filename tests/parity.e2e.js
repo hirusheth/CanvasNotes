@@ -165,7 +165,7 @@ async (page) => {
 
   // Shared between sections; later sections look them up when run on their own.
   let boardA, boardA2, boardA3, boardB, boardD, note, todo, boardChild, column, image, sketch, syncA, table, cellAt, n1, n2, n3;
-  const SECTIONS = page.__sections || 'ABCDEFGHI';
+  const SECTIONS = page.__sections || 'ABCDEFGHIJK';
   const run = (x) => SECTIONS.includes(x);
   const findBoard = async (title) => (await api()).find((e) => e.type === 'board' && e.content.title === title);
   const resolve = async () => {
@@ -1051,34 +1051,53 @@ async (page) => {
       throw new Error(`[${step}] ${String(e.message || e).split('\n')[0]}`);
     }
   });
-  await check('H4', 'Interface language: Español, Français, Português', async () => {
-    const seen = {};
+  await check('H4', 'Interface language: all 11 Milanote languages', async () => {
+    // Located by stable hooks, not by labels, since the labels change with the language.
+    const openSettings = async () => {
+      if (!(await page.locator('select:has(option[value="ko"])').count())) await page.locator('.toolbar .tool-more').click();
+    };
+    const seen = [];
+    const english = await page.locator('.toolbar .tool span').allInnerTexts();
     for (const [code, note, menuItem, settings] of [
       ['es', 'Nota', 'Nueva nota', 'Ajustes'],
       ['fr', 'Note', 'Nouvelle note', 'Réglages'],
       ['pt', 'Nota', 'Nova nota', 'Configurações'],
+      ['de', 'Notiz', 'Neue Notiz', 'Einstellungen'],
+      ['it', 'Nota', 'Nuova nota', 'Impostazioni'],
+      ['nl', 'Notitie', 'Nieuwe notitie', 'Instellingen'],
+      ['pl', 'Notatka', 'Nowa notatka', 'Ustawienia'],
+      ['ru', 'Заметка', 'Новая заметка', 'Настройки'],
+      ['ja', 'ノート', '新しいノート', '設定'],
+      ['zh', '笔记', '新建笔记', '设置'],
+      ['ko', '노트', '새 노트', '설정'],
     ]) {
-      if (!(await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).count())) await page.locator('.toolbar .tool').filter({ hasText: /^(More|Más|Plus|Mais)$/ }).click();
-      await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).locator('select').selectOption(code);
+      await openSettings();
+      await page.locator('select:has(option[value="ko"])').selectOption(code);
       await wait(400);
-      const tools = (await page.locator('.toolbar .tool span').allInnerTexts()).join('|');
+      const tools = await page.locator('.toolbar .tool span').allInnerTexts();
       const heading = await page.locator('.side-panel .side-head h2').first().innerText();
       await page.keyboard.press('Escape');
       const [ex, ey] = await emptyPoint();
       await rclickAt(ex, ey);
       const menuText = await page.locator('.menu').innerText();
       await page.keyboard.press('Escape');
-      seen[code] = `${tools.split('|')[0]} / ${heading}`;
-      assert(tools.split('|')[0] === note, `${code}: toolbar starts with ${tools.split('|')[0]}`);
+      seen.push(`${code}: ${tools[0]} / ${heading}`);
+      assert(tools[0] === note, `${code}: toolbar starts with ${tools[0]}`);
       assert(heading === settings, `${code}: settings heading ${heading}`);
       assert(menuText.includes(menuItem), `${code}: board menu lacks ${menuItem}`);
-      assert(await page.evaluate(() => document.documentElement.lang) === code, `${code}: html lang`);
+      assert((await page.evaluate(() => document.documentElement.lang)) === code, `${code}: html lang`);
+      // Non-Latin scripts: no toolbar label may still read exactly as in English.
+      if (['ru', 'ja', 'zh', 'ko'].includes(code)) {
+        const same = tools.filter((x, i) => x === english[i]);
+        assert(!same.length, `${code}: untranslated ${same.join(', ')}`);
+      }
     }
-    await page.locator('.toolbar .tool').filter({ hasText: /^(More|Más|Plus|Mais)$/ }).click();
-    await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).locator('select').selectOption('en');
+    await openSettings();
+    await page.locator('select:has(option[value="ko"])').selectOption('en');
     await wait(300);
+    await page.keyboard.press('Escape');
     assert((await page.locator('.toolbar .tool span').first().innerText()) === 'Note', 'back to English');
-    return Object.entries(seen).map(([k, v]) => `${k}: ${v}`).join('; ');
+    return seen.join('; ');
   });
 
   // ------------------------------------------------------------ I. layouts
@@ -1098,6 +1117,628 @@ async (page) => {
   }
   }
   await page.setViewportSize({ width: 1400, height: 900 });
+  await wait(800); // let the layout settle back from the phone and tablet sizes
+
+  if (run('K')) {
+  // ------------------------------------------------------------ K. remaining rows of the parity table
+  // Self-contained: a fresh board, and every card it needs is made here.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE }).catch(() => {});
+  const clip = () => page.evaluate(() => navigator.clipboard.readText());
+  const png = (colour) =>
+    page.evaluate((colour) => {
+      const c = document.createElement('canvas');
+      c.width = 90;
+      c.height = 60;
+      const g = c.getContext('2d');
+      g.fillStyle = colour;
+      g.fillRect(0, 0, 90, 60);
+      return c.toDataURL('image/png');
+    }, colour);
+  const pngFile = async (name, colour) => ({ name, mimeType: 'image/png', buffer: Buffer.from((await png(colour)).split(',')[1], 'base64') });
+  const pick = async (trigger, file) => {
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), trigger()]);
+    await chooser.setFiles(file);
+    await wait(1200);
+  };
+  const el = async (id) => (await api()).find((e) => e.id === id);
+  // Sets a (possibly hidden) colour input the way a user's pick would.
+  const setColour = (loc, value) =>
+    loc.evaluate((input, v) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, v);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, value);
+  const newNote = async (text) => {
+    const before = await fresh('New Note');
+    await typeSlow(text);
+    await page.keyboard.press('Escape');
+    return created(before, 'note');
+  };
+  const fresh = async (label, more = false) => {
+    const [x, y] = await emptyPoint();
+    return (await newAt(x, y, label, more)).before;
+  };
+  await home();
+  const boardK = await enterBoard(`K Rows ${Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 5)}`);
+
+  await check('K1', 'Text: hyperlink and small text', async () => {
+    const before = await fresh('New Note');
+    await typeSlow('Visit site');
+    await page.keyboard.press('Shift+Home');
+    await page.locator('.format-bar button[title^="Hyperlink"]').click(); // prompt answered with https://example.com
+    await wait(200);
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await typeSlow('fine print');
+    await page.keyboard.press('Shift+Home');
+    await page.locator('.format-bar .fb-style').click();
+    await page.locator('.fb-pop button', { hasText: 'Small text' }).click();
+    await page.keyboard.press('Escape');
+    const html = (await created(before, 'note')).content.html;
+    assert(/<a [^>]*href="https:\/\/example\.com/.test(html), `no link: ${html}`);
+    assert(/<small>fine print<\/small>/.test(html), `no small text: ${html}`);
+  });
+
+  let tableK;
+  const kCell = (r, c) => card(tableK.id).locator('tbody tr').nth(r).locator('td').nth(c);
+  // `item` is exact button text, or a selector inside the table menu.
+  const cellMenu = async (r, c, item) => {
+    await kCell(r, c).click({ button: 'right' });
+    const btn = item.startsWith('.') || item.startsWith('button') ? page.locator(`.table-menu ${item}`) : page.locator('.table-menu button').filter({ hasText: new RegExp(`^${item}$`) });
+    await btn.first().click();
+    await wait(200);
+  };
+  await check('K2', 'Table: formula error message, alignment, bold, cell colour', async () => {
+    const before = await fresh('New Table');
+    // Tab past the last cell adds a fourth, empty row.
+    for (const v of ['Name', 'N', 'F', 'x', '5', '=B2*2', 'y', '0', '=B2/B3']) {
+      await typeSlow(v);
+      await page.keyboard.press('Tab');
+    }
+    await page.keyboard.press('Escape');
+    tableK = await created(before, 'table');
+    const err = kCell(2, 2);
+    const tip = await err.getAttribute('title');
+    assert(/divided by zero/.test(tip || ''), `error cell title: ${tip} (${await err.innerText()})`);
+    await cellMenu(1, 0, '⇥');
+    await cellMenu(1, 0, '.menu-row button:has(b)');
+    await kCell(1, 0).click({ button: 'right' });
+    await page.locator('.table-menu .menu-colors .swatch-dot:not(.no-color)').first().click();
+    await settle();
+    const st = (await el(tableK.id)).content.styles?.['1:0'] || {};
+    assert(st.align === 'right' && st.bold && st.bg, JSON.stringify(st));
+    return `#DIV/0 → “${tip}”`;
+  });
+  await check('K3', 'Table: header row, move row, delete row, paste values', async () => {
+    assert(tableK, 'needs K2');
+    // Copy the formula cell (=B2*2 → 10) and paste only its value into the empty row.
+    await cellMenu(1, 2, 'Copy');
+    await cellMenu(3, 0, 'Paste Values');
+    await settle();
+    let cells = (await el(tableK.id)).content.cells;
+    assert(cells[3][0] === '10', `paste values: ${JSON.stringify(cells)}`);
+    await cellMenu(2, 0, 'button[title="Move row up"]');
+    await settle();
+    cells = (await el(tableK.id)).content.cells;
+    assert(cells[1][0] === 'y' && cells[2][0] === 'x', `move up: ${JSON.stringify(cells)}`);
+    await cellMenu(3, 0, 'Delete Row');
+    await settle();
+    cells = (await el(tableK.id)).content.cells;
+    assert(cells.length === 3, `delete row: ${cells.length} rows`);
+    await page.mouse.dblclick(...Object.values(await centre(kCell(0, 0))));
+    await wait(300);
+    await card(tableK.id).locator('.table-actions input[type=checkbox]').check();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await settle();
+    assert((await el(tableK.id)).content.header === true, 'header row not saved');
+  });
+  await check('K4', 'Board menu: select all, custom background, revert to default', async () => {
+    const [x, y] = await emptyPoint();
+    await rclickAt(x, y);
+    await menu('Select All');
+    const selected = await page.locator('[data-el].selected').count();
+    await page.keyboard.press('Escape');
+    assert(selected >= 2, `${selected} selected`);
+    await rclickAt(x, y);
+    await menu('Change Board Background');
+    await setColour(page.locator('.menu input[type=color]'), '#336699');
+    await settle();
+    const custom = (await el(boardK.id)).content.background;
+    await page.keyboard.press('Escape');
+    await rclickAt(x, y);
+    await menu('Change Board Background');
+    await page.locator('.menu .swatch-dot[title="Revert to default"]').click();
+    await settle();
+    const reverted = (await el(boardK.id)).content.background;
+    assert(custom === '#336699' && !reverted, `${custom} → ${reverted}`);
+  });
+  let noteK;
+  await check('K5', 'Card menu: choose a custom colour', async () => {
+    noteK = await newNote('Colour me');
+    const p = await centre(card(noteK.id));
+    await rclickAt(p.x, p.y);
+    await setColour(page.locator('.menu label.custom-color input[type=color]'), '#123456');
+    await settle();
+    await page.keyboard.press('Escape');
+    assert((await el(noteK.id)).color === '#123456', (await el(noteK.id)).color);
+  });
+  let childK;
+  await check('K6', 'Board card: rename, copy a link to this board', async () => {
+    const before = await fresh('New Board');
+    await typeSlow('Child');
+    await page.keyboard.press('Enter');
+    childK = await created(before, 'board');
+    await cardMenu(childK.id, 'Rename');
+    await page.keyboard.press('Control+a');
+    await typeSlow('Renamed child');
+    await page.keyboard.press('Enter');
+    await settle();
+    assert((await el(childK.id)).content.title === 'Renamed child', (await el(childK.id)).content.title);
+    await cardMenu(childK.id, 'Copy a Link to This Board');
+    await wait(300);
+    const url = await clip();
+    assert(url.includes(childK.id), url);
+    return url;
+  });
+  await check('K7', 'Shortcut: duplicate the shortcut, duplicate the board it links to', async () => {
+    assert(childK, 'needs K6');
+    // Give the child a card so the copied board has something inside.
+    await page.mouse.dblclick(...Object.values(await centre(card(childK.id))));
+    await wait(500);
+    const [x, y] = await emptyPoint();
+    await page.mouse.dblclick(x, y);
+    await wait(300);
+    await typeSlow('inside child');
+    await page.keyboard.press('Escape');
+    await go(`#/b/${boardK.id}`);
+    await cardMenu(childK.id, 'Create a Shortcut to This Board');
+    await settle();
+    const alias = (await api()).find((e) => e.type === 'alias' && e.content.boardId === childK.id);
+    assert(alias, 'no shortcut');
+    await cardMenu(alias.id, 'Duplicate This Shortcut');
+    await settle();
+    const aliases = (await api()).filter((e) => e.type === 'alias' && e.content.boardId === childK.id).length;
+    await cardMenu(alias.id, 'Duplicate the Board It Links To');
+    await settle();
+    const els = await api();
+    const copy = els.find((e) => e.type === 'board' && e.parentId === boardK.id && e.id !== childK.id && e.content.title?.startsWith('Renamed child'));
+    assert(aliases === 2, `${aliases} shortcuts`);
+    assert(copy && els.some((e) => e.parentId === copy.id), 'linked board not copied with its contents');
+  });
+  await check('K8', 'Templates: revert a template to a board', async () => {
+    const before = await fresh('New Board');
+    await typeSlow('Tpl source');
+    await page.keyboard.press('Enter');
+    const b = await created(before, 'board');
+    await cardMenu(b.id, 'Convert to Template');
+    await settle();
+    assert((await el(b.id)).parentId === '__templates', 'not converted');
+    await page.locator('.toolbar .tool', { hasText: /^Templates/ }).click();
+    await wait(300);
+    await page.locator('.template-line', { hasText: 'Tpl source' }).locator('button[title="Revert template to board"]').click();
+    await settle();
+    await page.keyboard.press('Escape');
+    const back = await el(b.id);
+    assert(back.parentId === boardK.id && !back.content.template, `${back.parentId} ${back.content.template}`);
+  });
+  let imageK;
+  await check('K9', 'Image: replace image, download original, copy link to file', async () => {
+    const [x, y] = await emptyPoint();
+    const before = new Set((await api()).map((e) => e.id));
+    await dropFile(x, y, 'k-one.png', 'image/png', await png('#2a9d8f'));
+    imageK = await created(before, 'image');
+    const src0 = imageK.content.src;
+    await pick(() => cardMenu(imageK.id, 'Replace Image'), await pngFile('k-two.png', '#e76f51'));
+    await settle();
+    const src1 = (await el(imageK.id)).content.src;
+    assert(src1 && src1 !== src0, `src ${src0} → ${src1}`);
+    const dl = waitDownload(6000);
+    await cardMenu(imageK.id, 'Download Original Image');
+    const d = await dl;
+    assert(d, 'no download');
+    await cardMenu(imageK.id, 'Copy Link to File');
+    await wait(300);
+    const link = await clip();
+    assert(link.endsWith(src1), link);
+    const r = await page.request.get(link);
+    assert(r.ok() && (r.headers()['content-type'] || '').includes('image'), `GET ${link}: ${r.status()}`);
+    return d.suggestedFilename();
+  });
+  await check('K10', 'File: PDF preview link, open and copy its link', async () => {
+    const [x, y] = await emptyPoint();
+    const before = new Set((await api()).map((e) => e.id));
+    await dropFile(x, y, 'k-doc.pdf', 'application/pdf', '%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+    const file = await created(before, 'file');
+    const href = await card(file.id).locator('.file-preview-link').getAttribute('href');
+    assert(href === file.content.src, `preview link ${href}`);
+    await cardMenu(file.id, 'Copy Link to File');
+    await wait(300);
+    const link = await clip();
+    const r = await page.request.get(link);
+    assert(r.ok() && (await r.text()).startsWith('%PDF'), `GET ${link}: ${r.status()}`);
+  });
+  await check('K11', 'Link: refresh preview, replace preview image', async () => {
+    const before = await fresh('New Link');
+    await typeSlow('https://example.com/');
+    await page.keyboard.press('Enter');
+    await wait(1500);
+    const link = await created(before, 'link');
+    const req = page.waitForRequest((r) => r.url().includes('/api/unfurl'), { timeout: 6000 });
+    await cardMenu(link.id, 'Refresh Preview');
+    await req;
+    await wait(1500);
+    await pick(() => cardMenu(link.id, 'Replace Preview'), await pngFile('k-preview.png', '#264653'));
+    await settle();
+    const image = (await el(link.id)).content.image;
+    assert(image?.startsWith('/files/'), `preview image ${image}`);
+  });
+  await check('K12', 'Drawing: palette toggle, eyedropper, undo/redo, selection tool, eraser', async () => {
+    const before = await fresh('New Sketch', true);
+    const paper = await page.locator('.draw-svg').boundingBox();
+    const stroke = async (y) => {
+      await page.mouse.move(paper.x + 40, paper.y + y);
+      await page.mouse.down();
+      for (let i = 0; i < 10; i++) await page.mouse.move(paper.x + 40 + i * 14, paper.y + y + (i % 2) * 4);
+      await page.mouse.up();
+      await wait(100);
+    };
+    const paths = () => page.locator('.draw-svg path').count();
+    const colour = () => page.locator('.draw-tools input[type=color]').inputValue();
+    await stroke(40);
+    const first = await colour();
+    const shown = await page.locator('.draw-tools .pen-color').count();
+    await page.keyboard.press('c');
+    const toggled = await page.locator('.draw-tools .pen-color').count();
+    if (!toggled) await page.keyboard.press('c');
+    await page.locator('.draw-tools .pen-color').nth(3).click();
+    const second = await colour();
+    await stroke(120);
+    assert((shown > 0) !== (toggled > 0), `palette ${shown} → ${toggled}`);
+    assert(second !== first, 'colour did not change');
+    // Eyedropper on the first stroke brings its colour back.
+    await page.keyboard.press('i');
+    await page.mouse.click(paper.x + 40 + 5 * 14, paper.y + 40 + 4);
+    await wait(200);
+    assert((await colour()) === first, `eyedropper picked ${await colour()}, expected ${first}`);
+    const n2 = await paths();
+    await page.keyboard.press('Control+z');
+    const n1 = await paths();
+    await page.keyboard.press('Control+Shift+z');
+    assert(n2 === 2 && n1 === 1 && (await paths()) === 2, `undo/redo ${n2} → ${n1} → ${await paths()}`);
+    // Selection tool: box the second stroke, delete it.
+    await page.keyboard.press('v');
+    await page.mouse.move(paper.x + 20, paper.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(paper.x + 220, paper.y + 145, { steps: 5 });
+    await page.mouse.up();
+    const del = await page.locator('.draw-tools button', { hasText: /Delete 1/ }).count();
+    await page.keyboard.press('Delete');
+    const afterSelect = await paths();
+    // Eraser across the first stroke.
+    await page.keyboard.press('e');
+    await page.mouse.move(paper.x + 100, paper.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(paper.x + 100, paper.y + 70, { steps: 6 });
+    await page.mouse.up();
+    const afterErase = await paths();
+    assert(del === 1 && afterSelect === 1 && afterErase === 0, `select ${del}/${afterSelect}, erase ${afterErase}`);
+    await page.keyboard.press('p');
+    await stroke(80);
+    await page.locator('.draw-tools button', { hasText: 'Save' }).click();
+    const sk = await created(before, 'sketch');
+    assert(sk.content.strokes.length === 1, `${sk.content.strokes.length} strokes saved`);
+  });
+  await check('K13', 'To-do: delete completed tasks', async () => {
+    const before = await fresh('New To-do');
+    await typeSlow('Chores');
+    await page.keyboard.press('Enter');
+    await typeSlow('Done one');
+    await page.keyboard.press('Enter');
+    await typeSlow('Open one');
+    await page.keyboard.press('Escape');
+    const todo = await created(before, 'todo');
+    await card(todo.id).locator('input[type=checkbox]').first().check();
+    await settle();
+    await cardMenu(todo.id, 'Delete Completed Tasks');
+    await settle();
+    const items = (await el(todo.id)).content.items;
+    assert(items.length === 1 && items[0].text === 'Open one', JSON.stringify(items));
+  });
+  await check('K14', 'Comment: edit and delete a comment', async () => {
+    const before = await fresh('New Comment');
+    await typeSlow('First thought');
+    await page.keyboard.press('Enter');
+    const c = await created(before, 'comment');
+    await card(c.id).locator('.comment-tools button', { hasText: 'Edit' }).first().click({ force: true });
+    await page.keyboard.press('Control+a');
+    await typeSlow('Edited thought');
+    await page.keyboard.press('Enter');
+    await settle();
+    const edited = (await el(c.id)).content.comments;
+    assert(edited.length === 1 && edited[0].text === 'Edited thought', JSON.stringify(edited));
+    await card(c.id).locator('.comment-tools button', { hasText: 'Delete' }).first().click({ force: true });
+    await settle();
+    assert((await el(c.id)).content.comments.length === 0, 'not deleted');
+  });
+  await check('K15', 'Synced copy: stop syncing', async () => {
+    const original = await newNote('Synced text');
+    const before = new Set((await api()).map((e) => e.id));
+    await cardMenu(original.id, 'Create Synced Copy');
+    const copy = await created(before, 'note');
+    assert(copy.syncId, 'copy not synced');
+    await cardMenu(copy.id, 'Stop Syncing This Copy');
+    await settle();
+    assert(!(await el(copy.id)).syncId, 'still synced');
+  });
+  await check('K16', 'Labels: rename and delete (with confirmation)', async () => {
+    noteK = await newNote('Label me');
+    await cardMenu(noteK.id, 'Labels…');
+    await page.locator('.labels-dialog .palette-input').fill('Temp');
+    await page.keyboard.press('Enter');
+    await settle();
+    const label = (await api()).find((e) => e.type === 'label' && e.content.name === 'Temp');
+    assert(label && (await el(noteK.id)).labels?.includes(label.id), 'label not applied');
+    await page.locator('.labels-dialog li', { hasText: 'Temp' }).locator('button[title="Edit label"]').click();
+    await page.locator('.label-editor input').first().fill('Temp renamed');
+    await page.keyboard.press('Enter');
+    await settle();
+    assert((await el(label.id)).content.name === 'Temp renamed', 'not renamed');
+    await page.locator('.labels-dialog li', { hasText: 'Temp renamed' }).locator('button[title="Edit label"]').click();
+    await page.locator('.label-editor button.danger').first().click();
+    await page.locator('.label-editor button', { hasText: 'Yes' }).click();
+    await settle();
+    await page.keyboard.press('Escape');
+    assert(!(await el(label.id)) && !(await el(noteK.id)).labels?.includes(label.id), 'label still there');
+  });
+  await check('K17', 'Navigation: back and forward (Alt ← / Alt →)', async () => {
+    assert(childK, 'needs K6');
+    await go(`#/b/${childK.id}`);
+    await page.keyboard.press('Alt+ArrowLeft');
+    await wait(500);
+    const back = page.url();
+    await page.keyboard.press('Alt+ArrowRight');
+    await wait(500);
+    const fwd = page.url();
+    assert(back.includes(boardK.id) && fwd.includes(childK.id), `${back} / ${fwd}`);
+    await go(`#/b/${boardK.id}`);
+  });
+  await check('K18', 'Keyboard shortcuts panel lists every section', async () => {
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('?');
+    await wait(300);
+    const dialog = page.locator('.shortcuts-dialog');
+    const text = await dialog.textContent(); // headings are upper-cased by CSS
+    await page.keyboard.press('Escape');
+    const sections = ['The basics', 'Navigation', 'Zoom', 'Appearance', 'Text formatting', 'Markdown', 'To-do lists', 'Drawing'];
+    const missing = sections.filter((s) => !text.includes(s));
+    assert(!missing.length, `missing ${missing.join(', ')}`);
+    assert(/eyedropper/i.test(text) && /palette/i.test(text) && /selection tool/i.test(text), 'drawing shortcuts incomplete');
+  });
+  await check('K19', 'Export board as PDF (print)', async () => {
+    await page.evaluate(() => {
+      window.__printed = '';
+      window.open = () => ({ document: { write: (h) => (window.__printed += h), close() {} } });
+    });
+    await page.locator('.topbar button[title="Export board"]').click();
+    await wait(300);
+    await page.locator('.export-section button', { hasText: 'PDF (print)' }).click();
+    const t0 = Date.now();
+    const printed = await page.waitForFunction(() => window.__printed.length > 0, null, { timeout: 45000 }).then(() => true, () => false);
+    if (!printed) throw new Error(`nothing printed; toast: ${await page.locator('.toast').allInnerTexts()}; errors: ${errors.slice(-2)}`);
+    const html = await page.evaluate(() => window.__printed);
+    await page.keyboard.press('Escape');
+    assert(/<img src="data:image\/png/.test(html) && /window\.print\(\)/.test(html), html.slice(0, 120));
+    return `${Math.round((Date.now() - t0) / 1000)} s`;
+  });
+  await check('K20', 'Install to home screen: manifest, icons, standalone', async () => {
+    const link = await page.locator('link[rel="manifest"]').getAttribute('href');
+    const m = await (await page.request.get(new URL(link, BASE).href)).json();
+    const sizes = (m.icons || []).map((i) => i.sizes);
+    assert(m.name && m.display === 'standalone' && m.start_url, JSON.stringify(m).slice(0, 120));
+    assert(sizes.includes('192x192') && sizes.includes('512x512'), `icons ${sizes}`);
+    for (const i of m.icons) assert((await page.request.get(new URL(i.src, BASE).href)).ok(), `icon ${i.src}`);
+    assert(await page.locator('meta[name="apple-mobile-web-app-capable"], link[rel="apple-touch-icon"]').count(), 'no iOS home-screen tags');
+    return `${m.name}, ${m.display}, icons ${sizes.join(' ')}`;
+  });
+  await check('K21', 'Hosted: password sign-in, signed one-year cookie, rate limit, HTTPS-aware', async () => {
+    const AUTH = page.__authBase;
+    assert(AUTH, 'no password server (the runner starts one for section K)');
+    const req = page.context().request;
+    const locked = await req.get(`${AUTH}/api/state`);
+    assert(locked.status() === 401, `state without cookie: ${locked.status()}`);
+    const wrong = await req.post(`${AUTH}/api/login`, { data: { password: 'nope' }, headers: { 'x-forwarded-for': '10.9.9.1' } });
+    assert(wrong.status() === 401, `wrong password: ${wrong.status()}`);
+    const ok = await req.post(`${AUTH}/api/login`, { data: { password: page.__authPassword }, headers: { 'x-forwarded-proto': 'https', 'x-forwarded-for': '10.9.9.2' } });
+    const cookie = ok.headers()['set-cookie'] || '';
+    assert(ok.ok() && /HttpOnly/i.test(cookie) && /Max-Age=31536000/.test(cookie) && /Secure/.test(cookie), `cookie: ${cookie}`);
+    let last;
+    for (let i = 0; i < 11; i++) last = await req.post(`${AUTH}/api/login`, { data: { password: 'bad' }, headers: { 'x-forwarded-for': '10.9.9.3' } });
+    assert(last.status() === 429, `after 11 wrong tries: ${last.status()}`);
+    // The real sign-in page, in a separate browser context.
+    const ctx = await page.context().browser().newContext();
+    try {
+      const p = await ctx.newPage();
+      await p.goto(AUTH);
+      assert(/Sign in/.test(await p.title()), `title ${await p.title()}`);
+      await p.fill('#p', page.__authPassword);
+      await p.click('button');
+      await p.waitForSelector('.toolbar', { timeout: 8000 });
+      const state = await p.request.get(`${AUTH}/api/state`);
+      assert(state.ok(), `state after sign-in: ${state.status()}`);
+    } finally {
+      await ctx.close();
+    }
+  });
+  await home();
+  }
+
+  if (run('J')) {
+  // ------------------------------------------------------------ J. touch (phone)
+  // A separate touch-enabled phone context; gestures are real touch events sent through CDP.
+  let tctx, tp, cdp, boardJ;
+  try {
+    await home();
+    // A fresh board every run: the gestures need empty space.
+    boardJ = await enterBoard(`J Touch ${Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 5)}`);
+    await home();
+    tctx = await page.context().browser().newContext({ hasTouch: true, isMobile: true, viewport: { width: 393, height: 852 }, deviceScaleFactor: 2 });
+    tp = await tctx.newPage();
+    cdp = await tctx.newCDPSession(tp);
+    await tp.goto(`${BASE}/#/b/${boardJ.id}`);
+    await tp.waitForTimeout(900);
+  } catch (e) {
+    results.push({ id: 'J0', name: 'Touch context', ok: false, detail: String(e.message || e).split('\n')[0] });
+  }
+  const tw = (ms) => tp.waitForTimeout(ms);
+  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
+  const tap = async (x, y) => {
+    await touch('touchStart', [[x, y]]);
+    await touch('touchEnd', []);
+  };
+  const swipe = async (from, to, steps = 8, holdMs = 0) => {
+    await touch('touchStart', [from]);
+    if (holdMs) await tw(holdMs);
+    for (let i = 1; i <= steps; i++) {
+      await touch('touchMove', [[from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps]]);
+      await tw(16);
+    }
+    await touch('touchEnd', []);
+  };
+  const world = () =>
+    tp.evaluate(() => {
+      const m = document.querySelector('.world').style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/);
+      return { x: +m[1], y: +m[2], zoom: +m[3] };
+    });
+  const tEmpty = () =>
+    tp.evaluate(() => {
+      const r = document.querySelector('.canvas').getBoundingClientRect();
+      const free = (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        return el && (el.classList.contains('canvas') || el.classList.contains('world'));
+      };
+      for (let y = r.top + 80; y < r.bottom - 160; y += 30)
+        for (let x = r.left + 60; x < r.right - 60; x += 30) {
+          let ok = true;
+          for (let dy = -40; dy <= 40 && ok; dy += 20) for (let dx = -50; dx <= 50 && ok; dx += 25) ok = free(x + dx, y + dy);
+          if (ok) return [x, y];
+        }
+      return [r.left + r.width / 2, r.top + r.height / 2];
+    });
+  const notesOnJ = async () => (await api()).filter((e) => e.parentId === boardJ.id && e.type === 'note' && e.section === 'canvas');
+  const tCentre = async (id) => {
+    const b = await tp.locator(`[data-el="${id}"]`).first().boundingBox();
+    assert(b, 'card not visible on phone');
+    const p = [b.x + Math.min(30, b.width / 2), b.y + Math.min(20, b.height / 2)];
+    const under = await tp.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-el]')?.getAttribute('data-el'), p);
+    assert(under === id, `another card (${under}) covers ${id}`);
+    return p;
+  };
+  let jNote;
+
+  if (tp) {
+  await check('J1', 'Touch: double-tap empty board writes a note', async () => {
+    const before = (await notesOnJ()).length;
+    const [x, y] = await tEmpty();
+    await tap(x, y);
+    await tw(120);
+    await tap(x, y);
+    await tw(500);
+    await tp.keyboard.type('Tapped note', { delay: 15 });
+    const [ex, ey] = await tEmpty();
+    await tap(ex, ey);
+    await tw(900);
+    const notes = await notesOnJ();
+    jNote = notes.filter((n) => n.content.html.includes('Tapped note')).sort((a, b) => b.createdAt - a.createdAt)[0];
+    assert(notes.length === before + 1 && jNote, `notes ${before} → ${notes.length}`);
+  });
+  await check('J2', 'Touch: tap selects a card and shows the action bar', async () => {
+    assert(jNote, 'needs J1');
+    await tw(400);
+    await tap(...(await tCentre(jNote.id)));
+    await tw(400);
+    const bar = tp.locator('.selection-bar');
+    assert(await bar.isVisible(), 'no selection bar');
+    const text = await bar.innerText();
+    assert(/1 selected/.test(text), text);
+    const [ex, ey] = await tEmpty();
+    await tap(ex, ey);
+    await tw(400);
+    return text.replace(/\s+/g, ' ');
+  });
+  await check('J3', 'Touch: press and hold, then drag, moves a card', async () => {
+    assert(jNote, 'needs J1');
+    const before = (await api()).find((e) => e.id === jNote.id);
+    const [x, y] = await tCentre(jNote.id);
+    await swipe([x, y], [x + 70, y + 90], 10, 480);
+    await tw(900);
+    const after = (await api()).find((e) => e.id === jNote.id);
+    const menuOpen = await tp.locator('.menu').count();
+    if (menuOpen) await tp.keyboard.press('Escape');
+    assert(after.x !== before.x || after.y !== before.y, `stayed at ${before.x},${before.y}`);
+    assert(!menuOpen, 'a menu opened during the drag');
+    return `${before.x},${before.y} → ${after.x},${after.y}`;
+  });
+  await check('J4', 'Touch: holding still opens the card menu, which stays open after release', async () => {
+    assert(jNote, 'needs J1');
+    const [x, y] = await tCentre(jNote.id);
+    const count = (await api()).length;
+    await touch('touchStart', [[x, y]]);
+    await tw(950);
+    const during = await tp.locator('.menu').count();
+    await touch('touchEnd', []);
+    await tw(500);
+    const menu = tp.locator('.menu');
+    assert(await menu.isVisible(), `menu not open after release (open while held: ${during > 0})`);
+    const text = await menu.innerText();
+    assert(/Duplicate/.test(text), 'not the card menu');
+    await tw(300);
+    assert((await api()).length === count, 'the release triggered a menu item');
+    // On a phone the menu is a bottom sheet: tap the board above it to close.
+    const top = (await menu.boundingBox()).y;
+    await tap(12, Math.max(110, top - 30));
+    await tw(300);
+    assert(!(await tp.locator('.menu').count()), 'menu did not close');
+  });
+  await check('J5', 'Touch: pinch with two fingers zooms', async () => {
+    const before = await world();
+    const [cx, cy] = await tEmpty();
+    await touch('touchStart', [[cx - 40, cy], [cx + 40, cy]]);
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', [[cx - 40 - i * 9, cy], [cx + 40 + i * 9, cy]]);
+      await tw(16);
+    }
+    await touch('touchEnd', []);
+    await tw(400);
+    const after = await world();
+    assert(after.zoom > before.zoom * 1.3, `zoom ${before.zoom} → ${after.zoom}`);
+    return `zoom ${before.zoom.toFixed(2)} → ${after.zoom.toFixed(2)}`;
+  });
+  await check('J6', 'Touch: one-finger swipe on empty board pans', async () => {
+    const before = await world();
+    const [x, y] = await tEmpty();
+    await swipe([x, y], [x - 90, y - 110], 8);
+    await tw(300);
+    const after = await world();
+    assert(Math.abs(after.x - before.x) > 40 && Math.abs(after.y - before.y) > 40, `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+  });
+  await check('J7', 'Touch: tapping a tool in the bottom toolbar adds a card', async () => {
+    const tb = await tp.locator('.toolbar').boundingBox();
+    assert(tb.y + tb.height >= 850, 'toolbar is not at the bottom');
+    const before = (await notesOnJ()).length;
+    const b = await tp.locator('.toolbar .tool').first().boundingBox();
+    await tap(b.x + b.width / 2, b.y + b.height / 2);
+    await tw(500);
+    await tp.keyboard.type('From the toolbar', { delay: 15 }); // empty notes are discarded
+    const [ex, ey] = await tEmpty();
+    await tap(ex, ey);
+    await tw(900);
+    const after = (await notesOnJ()).length;
+    assert(after === before + 1, `notes ${before} → ${after}`);
+  });
+  }
+  await tctx?.close().catch(() => {});
+  }
 
   } catch (e) {
     results.push({ id: 'ABORT', name: 'script stopped', ok: false, detail: String(e.message || e).split('\n')[0].slice(0, 200) });
