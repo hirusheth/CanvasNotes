@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import * as api from './api';
+import { t } from './i18n';
 import { DEFAULT_WIDTH, ROOT_ID, type El, type ElementOf, type ElementType, type ContentByType } from './types';
 
 export type SaveStatus = 'saved' | 'saving' | 'error';
@@ -353,7 +354,7 @@ export function boardPath(boardId: string): { id: string; title: string }[] {
     if (id === state.publicRoot) return path;
     id = el.parentId;
   }
-  path.unshift({ id: ROOT_ID, title: 'Home' });
+  path.unshift({ id: ROOT_ID, title: t('Home') });
   return path;
 }
 
@@ -441,7 +442,7 @@ export function trashElements(ids: string[]) {
   commit(changes);
   setState({ selection: [], editingId: null });
   const n = Object.keys(changes).length;
-  if (n) toast(`Moved ${n} item${n === 1 ? '' : 's'} to Trash`);
+  if (n) toast(t(n === 1 ? 'Moved 1 item to Trash' : 'Moved {n} items to Trash', { n }));
 }
 
 export function restoreElement(id: string) {
@@ -517,7 +518,7 @@ export function setTheme(theme: Theme) {
 }
 
 export function toast(text: string) {
-  setState({ toast: { text, nonce: Date.now() } });
+  setState({ toast: { text: t(text), nonce: Date.now() } });
 }
 
 export function select(ids: string[]) {

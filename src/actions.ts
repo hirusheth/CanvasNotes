@@ -1,4 +1,5 @@
 // User-level operations shared by the toolbar, keyboard, menus and canvas.
+import { t } from './i18n';
 import * as api from './api';
 import {
   addElements,
@@ -117,7 +118,7 @@ export async function addFiles(files: File[], at: Placement = centerPlacement())
   for (const sheet of sheets) await importSpreadsheet(sheet, at);
   files = files.filter((f) => !sheets.includes(f));
   if (files.length === 0) return;
-  toast(`Uploading ${files.length} file${files.length === 1 ? '' : 's'}…`);
+  toast(t(files.length === 1 ? 'Uploading 1 file…' : 'Uploading {n} files…', { n: files.length }));
   const created: El[] = [];
   let offset = 0;
   let index = at.index ?? Infinity;
@@ -138,7 +139,7 @@ export async function addFiles(files: File[], at: Placement = centerPlacement())
   }
   if (created.length) {
     addElements(created);
-    toast(`Added ${created.length} file${created.length === 1 ? '' : 's'}`);
+    toast(t(created.length === 1 ? 'Added 1 file' : 'Added {n} files', { n: created.length }));
   }
 }
 
@@ -321,7 +322,7 @@ export function moveToBoard(ids: string[], targetBoardId: string) {
   commit(changes);
   setState({ selection: [] });
   const title = targetBoardId === 'root' ? 'Home' : (elements[targetBoardId] as Extract<El, { type: 'board' }>).content.title || 'board';
-  toast(`Moved ${moving.length} item${moving.length === 1 ? '' : 's'} to ${title}`);
+  toast(t(moving.length === 1 ? 'Moved 1 item to {title}' : 'Moved {n} items to {title}', { n: moving.length, title }));
 }
 
 // ---------------------------------------------------------------- text helpers
@@ -477,7 +478,7 @@ export function moveToInbox(ids = getState().selection) {
   patchElements(patches);
   setState({ selection: [] });
   const n = Object.keys(patches).length;
-  if (n) toast(`Moved ${n} item${n === 1 ? '' : 's'} to Unsorted`);
+  if (n) toast(t(n === 1 ? 'Moved 1 item to Unsorted' : 'Moved {n} items to Unsorted', { n }));
 }
 
 export function deleteCompletedTasks(id: string) {

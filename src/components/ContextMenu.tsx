@@ -39,6 +39,7 @@ import {
 import { uid } from '../store';
 import type { MediaOptions } from '../types';
 import { convertToTemplate, timeAgo } from './Panels';
+import { t } from '../i18n';
 
 export interface MenuState {
   x: number;
@@ -109,7 +110,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
   const Sub = ({ id, label, children }: { id: string; label: string; children: ReactNode }) => (
     <>
       <button className="has-sub" onClick={() => setSub(sub === id ? null : id)}>
-        {label} <span className="sub-caret">{sub === id ? '▾' : '▸'}</span>
+        {t(label)} <span className="sub-caret">{sub === id ? '▾' : '▸'}</span>
       </button>
       {sub === id && <div className="menu-sub">{children}</div>}
     </>
@@ -134,36 +135,36 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
     };
     return (
       <div ref={ref} className="menu" style={{ left: pos.x, top: pos.y }} role="menu">
-        <Item onClick={addAt('note')}>New Note</Item>
-        <Item onClick={addAt('todo')}>New To-do</Item>
-        <Item onClick={addAt('column')}>New Column</Item>
-        <Item onClick={addAt('board')}>New Board</Item>
-        <Item onClick={addAt('table')}>New Table</Item>
-        <Item onClick={addAt('comment')}>New Comment</Item>
-        <Item onClick={addAt('link')}>New Link</Item>
-        <Item onClick={addAt('line')}>New Line</Item>
-        <Item onClick={() => newFolder({ x: menu.world!.x, y: menu.world!.y })}>New Folder</Item>
-        <Item onClick={() => newPlaceholder({ x: menu.world!.x, y: menu.world!.y })}>New Image/File Placeholder</Item>
+        <Item onClick={addAt('note')}>{t('New Note')}</Item>
+        <Item onClick={addAt('todo')}>{t('New To-do')}</Item>
+        <Item onClick={addAt('column')}>{t('New Column')}</Item>
+        <Item onClick={addAt('board')}>{t('New Board')}</Item>
+        <Item onClick={addAt('table')}>{t('New Table')}</Item>
+        <Item onClick={addAt('comment')}>{t('New Comment')}</Item>
+        <Item onClick={addAt('link')}>{t('New Link')}</Item>
+        <Item onClick={addAt('line')}>{t('New Line')}</Item>
+        <Item onClick={() => newFolder({ x: menu.world!.x, y: menu.world!.y })}>{t('New Folder')}</Item>
+        <Item onClick={() => newPlaceholder({ x: menu.world!.x, y: menu.world!.y })}>{t('New Image/File Placeholder')}</Item>
         <Sub id="more-new" label="More">
-          <Item onClick={addAt('heading')}>New Heading</Item>
-          <Item onClick={addAt('document')}>New Document</Item>
-          <Item onClick={addAt('sketch')}>New Sketch</Item>
-          <Item onClick={addAt('swatch')}>New Colour</Item>
-          <Item onClick={addAt('link', 'video')}>New Video</Item>
-          <Item onClick={addAt('link', 'audio')}>New Audio</Item>
-          <Item onClick={addAt('link', 'map')}>New Map</Item>
-          <Item onClick={() => setState({ modal: { kind: 'imageSearch', at: { x: menu.world!.x, y: menu.world!.y } } })}>Search Images…</Item>
-          <Item onClick={() => setState({ modal: { kind: 'aiIdeas', at: { x: menu.world!.x, y: menu.world!.y } } })}>AI Ideas…</Item>
+          <Item onClick={addAt('heading')}>{t('New Heading')}</Item>
+          <Item onClick={addAt('document')}>{t('New Document')}</Item>
+          <Item onClick={addAt('sketch')}>{t('New Sketch')}</Item>
+          <Item onClick={addAt('swatch')}>{t('New Colour')}</Item>
+          <Item onClick={addAt('link', 'video')}>{t('New Video')}</Item>
+          <Item onClick={addAt('link', 'audio')}>{t('New Audio')}</Item>
+          <Item onClick={addAt('link', 'map')}>{t('New Map')}</Item>
+          <Item onClick={() => setState({ modal: { kind: 'imageSearch', at: { x: menu.world!.x, y: menu.world!.y } } })}>{t('Search Images…')}</Item>
+          <Item onClick={() => setState({ modal: { kind: 'aiIdeas', at: { x: menu.world!.x, y: menu.world!.y } } })}>{t('AI Ideas…')}</Item>
         </Sub>
         <div className="menu-sep" />
         <Item onClick={() => pasteInternal({ x: menu.world!.x, y: menu.world!.y }) || void 0} kbd="Ctrl V">
-          Paste
+          {t('Paste')}
         </Item>
         <Item onClick={undo} kbd="Ctrl Z">
-          Undo
+          {t('Undo')}
         </Item>
         <Item onClick={redo} kbd="Ctrl ⇧ Z">
-          Redo
+          {t('Redo')}
         </Item>
         <Item
           onClick={() =>
@@ -171,7 +172,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           }
           kbd="Ctrl A"
         >
-          Select All
+          {t('Select All')}
         </Item>
         <div className="menu-sep" />
         <Sub id="bg" label="Change Board Background">
@@ -181,17 +182,17 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
                 key={c ?? 'default'}
                 className={`swatch-dot ${c ? '' : 'no-color'} ${(appearance?.background ?? null) === c ? 'active' : ''}`}
                 style={c ? { background: c } : undefined}
-                title={c ?? 'Revert to default'}
+                title={c ?? t('Revert to default')}
                 onClick={run(() => setBoard({ background: c }))}
               />
             ))}
-            <input type="color" title="Choose custom colour" value={appearance?.background || '#eeece8'} onChange={(e) => setBoard({ background: e.target.value })} />
+            <input type="color" title={t('Choose custom colour')} value={appearance?.background || '#eeece8'} onChange={(e) => setBoard({ background: e.target.value })} />
           </div>
-          <Item onClick={() => setBoard({ hideGrid: !appearance?.hideGrid })}>{appearance?.hideGrid ? 'Show Dot Grid' : 'Hide Dot Grid'}</Item>
+          <Item onClick={() => setBoard({ hideGrid: !appearance?.hideGrid })}>{appearance?.hideGrid ? t('Show Dot Grid') : t('Hide Dot Grid')}</Item>
         </Sub>
-        <Item onClick={() => setState({ panel: 'templates' })}>New Board from Template…</Item>
+        <Item onClick={() => setState({ panel: 'templates' })}>{t('New Board from Template…')}</Item>
         <Item onClick={() => setTheme(getState().theme === 'dark' ? 'light' : 'dark')} kbd="Ctrl ⇧ D">
-          Toggle Dark Mode
+          {t('Toggle Dark Mode')}
         </Item>
       </div>
     );
@@ -219,18 +220,18 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
               onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { color: c.value }]))))}
             />
           ))}
-          <label className="custom-color" title="Choose custom colour">
+          <label className="custom-color" title={t('Choose custom colour')}>
             <input type="color" value={customColor} onChange={(e) => patchElements(Object.fromEntries(ids.map((id) => [id, { color: e.target.value }])))} />
           </label>
         </div>
       )}
       {colorable && targets.some((t) => t.color && t.color !== 'transparent' && t.type !== 'line' && t.type !== 'heading') && (
-        <div className="menu-row" title="Colour mode">
+        <div className="menu-row" title={t('Colour mode')}>
           <button className={targets.every((t) => !t.colorStrip) ? 'active' : ''} onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { colorStrip: false }]))))}>
-            Background
+            {t('Background')}
           </button>
           <button className={targets.every((t) => t.colorStrip) ? 'active' : ''} onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { colorStrip: true }]))))}>
-            Top strip
+            {t('Top strip')}
           </button>
         </div>
       )}
@@ -238,24 +239,24 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       {/* type-specific actions */}
       {single?.type === 'board' && (
         <>
-          <Item onClick={() => navigate(single.id)}>Open Board</Item>
-          <Item onClick={() => window.open(boardUrl(single.id), '_blank')}>Open in New Tab</Item>
-          <Item onClick={() => copyText(boardUrl(single.id), 'Board link copied')}>Copy a Link to This Board</Item>
-          <Item onClick={() => createShortcut(single.id)}>Create a Shortcut to This Board</Item>
-          <Item onClick={() => setState({ modal: { kind: 'icon', id: single.id } })}>Change Icon…</Item>
-          <Item onClick={() => convertToTemplate(single.id)}>Convert to Template</Item>
+          <Item onClick={() => navigate(single.id)}>{t('Open Board')}</Item>
+          <Item onClick={() => window.open(boardUrl(single.id), '_blank')}>{t('Open in New Tab')}</Item>
+          <Item onClick={() => copyText(boardUrl(single.id), 'Board link copied')}>{t('Copy a Link to This Board')}</Item>
+          <Item onClick={() => createShortcut(single.id)}>{t('Create a Shortcut to This Board')}</Item>
+          <Item onClick={() => setState({ modal: { kind: 'icon', id: single.id } })}>{t('Change Icon…')}</Item>
+          <Item onClick={() => convertToTemplate(single.id)}>{t('Convert to Template')}</Item>
           {single.content.protected ? (
             <>
-              {!single.content.unlocked && <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'unlock' } })}>Unlock Board…</Item>}
-              <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'remove' } })}>Remove Password…</Item>
+              {!single.content.unlocked && <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'unlock' } })}>{t('Unlock Board…')}</Item>}
+              <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'remove' } })}>{t('Remove Password…')}</Item>
             </>
           ) : (
-            <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'set' } })}>Password Protect…</Item>
+            <Item onClick={() => setState({ modal: { kind: 'boardPassword', id: single.id, mode: 'set' } })}>{t('Password Protect…')}</Item>
           )}
           {single.content.publicToken ? (
             <>
-              <Item onClick={() => copyText(`${location.origin}/p/${single.content.publicToken}`, 'Read-only link copied')}>Copy Read-only Link</Item>
-              <Item onClick={() => patchElements({ [single.id]: { content: { publicToken: null } } })}>Unpublish</Item>
+              <Item onClick={() => copyText(`${location.origin}/p/${single.content.publicToken}`, 'Read-only link copied')}>{t('Copy Read-only Link')}</Item>
+              <Item onClick={() => patchElements({ [single.id]: { content: { publicToken: null } } })}>{t('Unpublish')}</Item>
             </>
           ) : (
             <Item
@@ -265,14 +266,14 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
                 copyText(`${location.origin}/p/${token}`, 'Published — read-only link copied');
               }}
             >
-              Publish Read-only Link
+              {t('Publish Read-only Link')}
             </Item>
           )}
         </>
       )}
       {single?.type === 'alias' && (
         <>
-          <Item onClick={() => navigate(single.content.boardId)}>Open Board</Item>
+          <Item onClick={() => navigate(single.content.boardId)}>{t('Open Board')}</Item>
           <Item
             onClick={() => {
               const target = getState().elements[single.content.boardId];
@@ -282,21 +283,21 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
               }
             }}
           >
-            Find Original Board
+            {t('Find Original Board')}
           </Item>
-          <Item onClick={() => duplicate([single.id])}>Duplicate This Shortcut</Item>
-          <Item onClick={() => duplicateLinkedBoard(single.id)}>Duplicate the Board It Links To</Item>
+          <Item onClick={() => duplicate([single.id])}>{t('Duplicate This Shortcut')}</Item>
+          <Item onClick={() => duplicateLinkedBoard(single.id)}>{t('Duplicate the Board It Links To')}</Item>
         </>
       )}
       {single && ['note', 'todo', 'column', 'board', 'link', 'swatch', 'line', 'heading', 'table', 'comment'].includes(single.type) && (
         <Item onClick={() => startEditing(single.id)} kbd="Enter">
-          {single.type === 'line' ? 'Edit Label' : single.type === 'board' ? 'Rename' : 'Edit'}
+          {single.type === 'line' ? 'Edit Label' : single.type === 'board' ? t('Rename') : t('Edit')}
         </Item>
       )}
       {single?.type === 'sketch' && (
         <>
-          <Item onClick={() => openDrawing(single.id)}>Edit Drawing</Item>
-          <Item onClick={() => exportElement(single.id)}>Download SVG</Item>
+          <Item onClick={() => openDrawing(single.id)}>{t('Edit Drawing')}</Item>
+          <Item onClick={() => exportElement(single.id)}>{t('Download SVG')}</Item>
         </>
       )}
       {single && (isVideoLink(single) || (single.type === 'file' && /^(video|audio)\//.test(single.content.mime))) && (
@@ -307,41 +308,41 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           />
         </Sub>
       )}
-      {single?.type === 'document' && <Item onClick={() => setState({ modal: { kind: 'document', id: single.id } })}>Open Document</Item>}
+      {single?.type === 'document' && <Item onClick={() => setState({ modal: { kind: 'document', id: single.id } })}>{t('Open Document')}</Item>}
       {single?.type === 'image' && (
         <>
-          <Item onClick={() => startEditing(single.id)}>Edit Caption</Item>
-          <Item onClick={() => openDrawing(single.id)}>Draw On</Item>
-          <Item onClick={() => void replaceImage(single.id)}>Replace Image</Item>
-          {single.content.src && <Item onClick={() => setState({ modal: { kind: 'crop', id: single.id } })}>Crop Image…</Item>}
-          {single.content.src && <Item onClick={() => cropToGrid(single.id)}>Crop Image to Fit Dot Grid</Item>}
-          {single.content.src && <Item onClick={() => convertToSketch(single.id)}>Convert to Sketch Card</Item>}
-          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>File Info</Item>
+          <Item onClick={() => startEditing(single.id)}>{t('Edit Caption')}</Item>
+          <Item onClick={() => openDrawing(single.id)}>{t('Draw On')}</Item>
+          <Item onClick={() => void replaceImage(single.id)}>{t('Replace Image')}</Item>
+          {single.content.src && <Item onClick={() => setState({ modal: { kind: 'crop', id: single.id } })}>{t('Crop Image…')}</Item>}
+          {single.content.src && <Item onClick={() => cropToGrid(single.id)}>{t('Crop Image to Fit Dot Grid')}</Item>}
+          {single.content.src && <Item onClick={() => convertToSketch(single.id)}>{t('Convert to Sketch Card')}</Item>}
+          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>{t('File Info')}</Item>
           <a className="menu-link" href={single.content.src} download onClick={onClose}>
-            Download Original Image
+            {t('Download Original Image')}
           </a>
-          <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>Copy Link to File</Item>
+          <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>{t('Copy Link to File')}</Item>
         </>
       )}
       {single?.type === 'file' && (
         <>
-          <Item onClick={() => window.open(single.content.src, '_blank', 'noopener')}>Open File</Item>
-          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>File Info</Item>
+          <Item onClick={() => window.open(single.content.src, '_blank', 'noopener')}>{t('Open File')}</Item>
+          <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>{t('File Info')}</Item>
           <a className="menu-link" href={single.content.src} download={single.content.name} onClick={onClose}>
-            Download
+            {t('Download')}
           </a>
-          <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>Copy Link to File</Item>
+          <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>{t('Copy Link to File')}</Item>
         </>
       )}
       {single?.type === 'link' && single.content.url && (
         <>
-          <Item onClick={() => window.open(single.content.url, '_blank', 'noopener')}>Open Link</Item>
-          <Item onClick={() => copyText(single.content.url, 'Link address copied')}>Copy Link Address</Item>
-          <Item onClick={() => void fetchLinkPreview(single.id, single.content.url)}>Refresh Preview</Item>
-          <Item onClick={() => replacePreview(single.id)}>Replace Preview</Item>
+          <Item onClick={() => window.open(single.content.url, '_blank', 'noopener')}>{t('Open Link')}</Item>
+          <Item onClick={() => copyText(single.content.url, 'Link address copied')}>{t('Copy Link Address')}</Item>
+          <Item onClick={() => void fetchLinkPreview(single.id, single.content.url)}>{t('Refresh Preview')}</Item>
+          <Item onClick={() => replacePreview(single.id)}>{t('Replace Preview')}</Item>
         </>
       )}
-      {single?.type === 'todo' && single.content.items.some((i) => i.done) && <Item onClick={() => deleteCompletedTasks(single.id)}>Delete Completed Tasks</Item>}
+      {single?.type === 'todo' && single.content.items.some((i) => i.done) && <Item onClick={() => deleteCompletedTasks(single.id)}>{t('Delete Completed Tasks')}</Item>}
       {single?.type === 'heading' && (
         <div className="menu-row">
           {(['large', 'medium', 'small'] as const).map((size) => (
@@ -352,9 +353,9 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
         </div>
       )}
       {single && CAPTION_TYPES.includes(single.type) && (
-        <Item onClick={() => setState({ captionEditId: single.id, selection: [single.id] })}>{single.caption ? 'Edit Description' : 'Add Description'}</Item>
+        <Item onClick={() => setState({ captionEditId: single.id, selection: [single.id] })}>{single.caption ? t('Edit Description') : t('Add Description')}</Item>
       )}
-      {cards.length > 0 && <Item onClick={() => setState({ modal: { kind: 'labels', ids: cards.map((c) => c.id) } })}>Labels…</Item>}
+      {cards.length > 0 && <Item onClick={() => setState({ modal: { kind: 'labels', ids: cards.map((c) => c.id) } })}>{t('Labels…')}</Item>}
       {cards.length > 0 && (
         <Sub id="reactions" label="Reactions">
           <div className="menu-row reactions-pick">
@@ -366,17 +367,17 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           </div>
         </Sub>
       )}
-      {single && single.type !== 'line' && single.type !== 'comment' && <Item onClick={() => attachComment(single.id)}>Add Comment</Item>}
-      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => createSyncedCopy(single.id)}>Create Synced Copy</Item>}
-      {single?.syncId && <Item onClick={() => unsync(single.id)}>Stop Syncing This Copy</Item>}
-      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => exportElement(single.id)}>Export…</Item>}
+      {single && single.type !== 'line' && single.type !== 'comment' && <Item onClick={() => attachComment(single.id)}>{t('Add Comment')}</Item>}
+      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => createSyncedCopy(single.id)}>{t('Create Synced Copy')}</Item>}
+      {single?.syncId && <Item onClick={() => unsync(single.id)}>{t('Stop Syncing This Copy')}</Item>}
+      {single && !['line', 'board', 'column', 'alias', 'label'].includes(single.type) && <Item onClick={() => exportElement(single.id)}>{t('Export…')}</Item>}
       {single && ['note', 'document', 'todo', 'heading'].includes(single.type) && (
         <Sub id="convert" label="Convert to">
-          {single.type !== 'note' && <Item onClick={() => convertElement(single.id, 'note')}>Convert to Note</Item>}
-          {single.type !== 'document' && <Item onClick={() => convertElement(single.id, 'document')}>Convert to Document</Item>}
-          {single.type !== 'todo' && <Item onClick={() => convertElement(single.id, 'todo')}>Convert to To-do</Item>}
-          {single.type !== 'heading' && <Item onClick={() => convertElement(single.id, 'heading')}>Convert to Heading</Item>}
-          <Item onClick={() => convertElement(single.id, 'board')}>Convert to Board</Item>
+          {single.type !== 'note' && <Item onClick={() => convertElement(single.id, 'note')}>{t('Convert to Note')}</Item>}
+          {single.type !== 'document' && <Item onClick={() => convertElement(single.id, 'document')}>{t('Convert to Document')}</Item>}
+          {single.type !== 'todo' && <Item onClick={() => convertElement(single.id, 'todo')}>{t('Convert to To-do')}</Item>}
+          {single.type !== 'heading' && <Item onClick={() => convertElement(single.id, 'heading')}>{t('Convert to Heading')}</Item>}
+          <Item onClick={() => convertElement(single.id, 'board')}>{t('Convert to Board')}</Item>
         </Sub>
       )}
 
@@ -384,12 +385,12 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       {lines.length > 0 && (
         <>
           <div className="menu-sep" />
-          <div className="menu-label">Line</div>
+          <div className="menu-label">{t('Line')}</div>
           <div className="menu-row">
             {(['end', 'both', 'none'] as const).map((arrow) => (
               <button
                 key={arrow}
-                title={arrow === 'end' ? 'Arrow at end' : arrow === 'both' ? 'Arrows at both ends' : 'No arrows'}
+                title={arrow === 'end' ? 'Arrow at end' : arrow === 'both' ? t('Arrows at both ends') : t('No arrows')}
                 className={lines.every((l) => l.content.arrow === arrow) ? 'active' : ''}
                 onClick={run(() => patchElements(Object.fromEntries(lines.map((l) => [l.id, { content: { arrow } }]))))}
               >
@@ -397,7 +398,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
               </button>
             ))}
             <button
-              title="Dashed"
+              title={t('Dashed')}
               className={lines.every((l) => l.content.dashed) ? 'active' : ''}
               onClick={run(() => patchElements(Object.fromEntries(lines.map((l) => [l.id, { content: { dashed: !lines.every((x) => x.content.dashed) } }]))))}
             >
@@ -418,42 +419,42 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       {cards.length > 1 && (
         <>
           <div className="menu-sep" />
-          <Item onClick={() => groupIntoColumn(ids)}>Group into Column</Item>
-          <Item onClick={() => connectWithLines(ids)}>Connect with Lines</Item>
+          <Item onClick={() => groupIntoColumn(ids)}>{t('Group into Column')}</Item>
+          <Item onClick={() => connectWithLines(ids)}>{t('Connect with Lines')}</Item>
           <Sub id="align" label="Align & Distribute">
             <div className="menu-row">
-              <button title="Align left" onClick={run(() => alignSelection('left', ids))}>⇤</button>
-              <button title="Align centre" onClick={run(() => alignSelection('center', ids))}>↔</button>
-              <button title="Align right" onClick={run(() => alignSelection('right', ids))}>⇥</button>
+              <button title={t('Align left')} onClick={run(() => alignSelection('left', ids))}>⇤</button>
+              <button title={t('Align centre')} onClick={run(() => alignSelection('center', ids))}>↔</button>
+              <button title={t('Align right')} onClick={run(() => alignSelection('right', ids))}>⇥</button>
             </div>
             <div className="menu-row">
-              <button title="Align top" onClick={run(() => alignSelection('top', ids))}>⤒</button>
-              <button title="Align middle" onClick={run(() => alignSelection('middle', ids))}>↕</button>
-              <button title="Align bottom" onClick={run(() => alignSelection('bottom', ids))}>⤓</button>
+              <button title={t('Align top')} onClick={run(() => alignSelection('top', ids))}>⤒</button>
+              <button title={t('Align middle')} onClick={run(() => alignSelection('middle', ids))}>↕</button>
+              <button title={t('Align bottom')} onClick={run(() => alignSelection('bottom', ids))}>⤓</button>
             </div>
-            <Item onClick={() => distributeSelection('horizontal', ids)}>Distribute Horizontally</Item>
-            <Item onClick={() => distributeSelection('vertical', ids)}>Distribute Vertically</Item>
+            <Item onClick={() => distributeSelection('horizontal', ids)}>{t('Distribute Horizontally')}</Item>
+            <Item onClick={() => distributeSelection('vertical', ids)}>{t('Distribute Vertically')}</Item>
           </Sub>
         </>
       )}
-      {cards.length === 1 && single && !single.columnId && single.type !== 'column' && <Item onClick={() => groupIntoColumn(ids)}>Group into Column</Item>}
+      {cards.length === 1 && single && !single.columnId && single.type !== 'column' && <Item onClick={() => groupIntoColumn(ids)}>{t('Group into Column')}</Item>}
 
       <div className="menu-sep" />
       <Item onClick={() => copySelection() && trashElements(ids)} kbd="Ctrl X">
-        Cut
+        {t('Cut')}
       </Item>
       <Item onClick={() => void copySelection()} kbd="Ctrl C">
-        Copy
+        {t('Copy')}
       </Item>
       <Item onClick={() => duplicate(ids)} kbd="Ctrl D">
-        Duplicate
+        {t('Duplicate')}
       </Item>
       <Sub id="style" label="Styles">
         <Item onClick={() => copyStyle(ids[0])} kbd="Ctrl Alt C">
-          Copy Style
+          {t('Copy Style')}
         </Item>
         <Item onClick={() => pasteStyle(ids)} kbd="Ctrl Alt V">
-          Paste Styles
+          {t('Paste Styles')}
         </Item>
       </Sub>
       {targets.some((t) => !t.columnId && t.type !== 'line') && (
@@ -465,7 +466,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
             }}
             kbd="Ctrl ]"
           >
-            Bring to Front
+            {t('Bring to Front')}
           </Item>
           <Item
             onClick={() => {
@@ -475,24 +476,25 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
             }}
             kbd="Ctrl ["
           >
-            Send to Back
+            {t('Send to Back')}
           </Item>
         </>
       )}
-      <Item onClick={() => setLocked(ids, !allLocked)}>{allLocked ? 'Unlock Position' : 'Lock Position'}</Item>
+      <Item onClick={() => setLocked(ids, !allLocked)}>{allLocked ? t('Unlock Position') : t('Lock Position')}</Item>
       {cards.length > 0 && (
         <Item onClick={() => moveToInbox(ids)} kbd="U">
-          Move to Unsorted
+          {t('Move to Unsorted')}
         </Item>
       )}
       <div className="menu-sep" />
       <Item danger onClick={() => trashElements(ids)} kbd="Del">
-        Move to Trash
+        {t('Move to Trash')}
       </Item>
       {single && (
         <div className="menu-note">
-          Created {timeAgo(single.createdAt)}
-          {single.updatedAt - single.createdAt > 5000 ? `, modified ${timeAgo(single.updatedAt)}` : ''}
+          {single.updatedAt - single.createdAt > 5000
+            ? t('Created {created}, modified {modified}', { created: timeAgo(single.createdAt), modified: timeAgo(single.updatedAt) })
+            : t('Created {created}', { created: timeAgo(single.createdAt) })}
         </div>
       )}
     </div>
@@ -531,16 +533,16 @@ function MediaOptionsEditor({ value, onChange }: { value: MediaOptions; onChange
   return (
     <div className="media-options" onPointerDown={(e) => e.stopPropagation()}>
       <label>
-        Start <input value={start} placeholder="0:00" onChange={(e) => setStart(e.target.value)} onBlur={() => save({})} />
+        {t('Start')} <input value={start} placeholder="0:00" onChange={(e) => setStart(e.target.value)} onBlur={() => save({})} />
       </label>
       <label>
-        End <input value={end} placeholder="end" onChange={(e) => setEnd(e.target.value)} onBlur={() => save({})} />
+        {t('End')} <input value={end} placeholder={t('end')} onChange={(e) => setEnd(e.target.value)} onBlur={() => save({})} />
       </label>
       <label className="check">
-        <input type="checkbox" checked={flags.loop} onChange={(e) => save({ loop: e.target.checked })} /> Loop
+        <input type="checkbox" checked={flags.loop} onChange={(e) => save({ loop: e.target.checked })} /> {t('Loop')}
       </label>
       <label className="check">
-        <input type="checkbox" checked={flags.autoplay} onChange={(e) => save({ autoplay: e.target.checked })} /> Autoplay (muted)
+        <input type="checkbox" checked={flags.autoplay} onChange={(e) => save({ autoplay: e.target.checked })} /> {t('Autoplay (muted)')}
       </label>
     </div>
   );

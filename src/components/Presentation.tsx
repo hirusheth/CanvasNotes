@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getState, navigate, setState, useStore } from '../store';
 import { allRects, centerOn, canvasRect, fitRects } from '../viewport';
+import { t } from '../i18n';
 
 // Presentation mode: hides the interface, goes full screen, and steps through
 // the board's cards in reading order with the arrow keys or space.
@@ -73,8 +74,8 @@ export function Presentation() {
   return (
     <div className="presentation-hud">
       <span>{step < 0 ? 'Overview' : `${step + 1} / ${total}`}</span>
-      <span className="hud-hint">← → to move · Enter opens a board · Esc to exit</span>
-      <button onClick={() => setState({ presenting: false })}>Exit</button>
+      <span className="hud-hint">{t('← → to move · Enter opens a board · Esc to exit')}</span>
+      <button onClick={() => setState({ presenting: false })}>{t('Exit')}</button>
     </div>
   );
 }

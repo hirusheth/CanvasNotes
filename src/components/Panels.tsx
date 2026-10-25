@@ -24,6 +24,7 @@ import { exportBoardMarkdown, exportBoardPng, exportBoardText, exportBoardWord }
 import { ElementBody } from '../elements/ElementBody';
 import { getToolbarPrefs, setToolbarPrefs, ALL_TOOL_IDS, TOOL_LABELS } from './toolbarPrefs';
 import { CURRENCY_OPTIONS, FORMAT_OPTIONS, getLocaleSettings, numLocale, setLocaleSettings, type LocaleSettings } from '../locale';
+import { getLang, LANGUAGES, setLang, t, type Lang } from '../i18n';
 
 export const TYPE_LABEL: Record<El['type'], string> = {
   note: 'Note',
@@ -130,11 +131,11 @@ export function SearchPalette() {
 
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="palette" role="dialog" aria-label="Search">
+      <div className="palette" role="dialog" aria-label={t('Search')}>
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="Search notes, boards, to-dos, links, tables…"
+          placeholder={t('Search notes, boards, to-dos, links, tables…')}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -153,21 +154,21 @@ export function SearchPalette() {
         />
         <div className="palette-filters">
           <span className="palette-hint">
-            {query.trim() || labelFilter ? `${results.length} match${results.length === 1 ? '' : 'es'}` : 'Recently viewed boards'}
+            {query.trim() || labelFilter ? t(results.length === 1 ? '1 match' : '{n} matches', { n: results.length }) : t('Recently viewed boards')}
           </span>
           <label>
             Sort by:{' '}
             <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              <option value="relevance">Relevance</option>
-              <option value="modified">Last modified</option>
-              <option value="viewed">Last viewed</option>
+              <option value="relevance">{t('Relevance')}</option>
+              <option value="modified">{t('Last modified')}</option>
+              <option value="viewed">{t('Last viewed')}</option>
             </select>
           </label>
           {labels.length > 0 && (
             <label>
               Label:{' '}
               <select value={labelFilter ?? ''} onChange={(e) => setLabelFilter(e.target.value || null)}>
-                <option value="">Any</option>
+                <option value="">{t('Any')}</option>
                 {labels.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.content.name}
@@ -181,7 +182,7 @@ export function SearchPalette() {
           {results.map((r, i) => (
             <li key={r.el.id}>
               <button className={i === active ? 'active' : ''} onMouseEnter={() => setActive(i)} onClick={() => open(r.el)}>
-                <span className={`type-pill type-${r.el.type}`}>{TYPE_LABEL[r.el.type]}</span>
+                <span className={`type-pill type-${r.el.type}`}>{t(TYPE_LABEL[r.el.type])}</span>
                 <span className="result-text">
                   <Highlight text={snippet(r.text, query)} query={query} />
                   {r.el.labels?.length ? (
@@ -252,31 +253,31 @@ export function TrashPanel() {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <aside className="side-panel" aria-label="Trash">
+    <aside className="side-panel" aria-label={t('Trash')}>
       <div className="side-head">
-        <h2>Trash</h2>
-        <button className="icon-btn" onClick={close} title="Close">
+        <h2>{t('Trash')}</h2>
+        <button className="icon-btn" onClick={close} title={t('Close')}>
           ✕
         </button>
       </div>
-      <p className="side-sub">Restore things you removed, or delete them for good.</p>
+      <p className="side-sub">{t('Restore things you removed, or delete them for good.')}</p>
       <ul className="trash-list scrollable">
-        {trashed.length === 0 && <li className="trash-empty">Trash is empty.</li>}
+        {trashed.length === 0 && <li className="trash-empty">{t('Trash is empty.')}</li>}
         {trashed.map((el) => (
           <li key={el.id}>
             <div className="trash-item">
-              <span className={`type-pill type-${el.type}`}>{TYPE_LABEL[el.type]}</span>
+              <span className={`type-pill type-${el.type}`}>{t(TYPE_LABEL[el.type])}</span>
               <div className="trash-text">
-                <div className="trash-title">{plainText(el).slice(0, 90) || (el.type === 'image' ? 'Image' : 'Untitled')}</div>
+                <div className="trash-title">{plainText(el).slice(0, 90) || (el.type === 'image' ? t('Image') : t('Untitled'))}</div>
                 <div className="trash-where">
                   from {boardTitle(el.parentId)} · {timeAgo(el.trashedAt ?? el.updatedAt)}
                 </div>
               </div>
             </div>
             <div className="trash-actions">
-              <button onClick={() => restoreElement(el.id)}>Restore</button>
+              <button onClick={() => restoreElement(el.id)}>{t('Restore')}</button>
               <button className="danger" onClick={() => deleteForever([el.id])}>
-                Delete
+                {t('Delete')}
               </button>
             </div>
           </li>
@@ -286,7 +287,7 @@ export function TrashPanel() {
         <div className="side-foot">
           {confirming ? (
             <>
-              <span>This will permanently delete all boards and cards in the trash.</span>
+              <span>{t('This will permanently delete all boards and cards in the trash.')}</span>
               <button
                 className="danger solid"
                 onClick={() => {
@@ -294,13 +295,13 @@ export function TrashPanel() {
                   setConfirming(false);
                 }}
               >
-                Continue
+                {t('Continue')}
               </button>
-              <button onClick={() => setConfirming(false)}>Cancel</button>
+              <button onClick={() => setConfirming(false)}>{t('Cancel')}</button>
             </>
           ) : (
             <button className="danger" onClick={() => setConfirming(true)}>
-              Empty trash
+              {t('Empty trash')}
             </button>
           )}
         </div>
@@ -309,12 +310,12 @@ export function TrashPanel() {
   );
 }
 
-export function timeAgo(t: number) {
-  const s = Math.round((Date.now() - t) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return new Date(t).toLocaleDateString(numLocale());
+export function timeAgo(at: number) {
+  const s = Math.round((Date.now() - at) / 1000);
+  if (s < 60) return t('just now');
+  if (s < 3600) return t('{n} min ago', { n: Math.round(s / 60) });
+  if (s < 86400) return t('{n} h ago', { n: Math.round(s / 3600) });
+  return new Date(at).toLocaleDateString(numLocale());
 }
 
 // ---------------------------------------------------------------- unsorted (inbox)
@@ -381,22 +382,22 @@ export function InboxPanel({ scope = 'board' }: { scope?: 'board' | 'quick' }) {
   };
 
   return (
-    <aside className="side-panel inbox-panel" aria-label={scope === 'quick' ? 'Quick notes' : 'Unsorted'}>
+    <aside className="side-panel inbox-panel" aria-label={scope === 'quick' ? t('Quick notes') : t('Unsorted')}>
       <div className="side-head">
-        <h2>{scope === 'quick' ? 'Quick notes' : 'Unsorted'}</h2>
-        <button className="icon-btn" onClick={close} title="Close">
+        <h2>{scope === 'quick' ? t('Quick notes') : t('Unsorted')}</h2>
+        <button className="icon-btn" onClick={close} title={t('Close')}>
           ✕
         </button>
       </div>
       {scope === 'quick' ? (
-        <p className="side-sub">Jot things down from any device — your phone included — and sort them onto a board later. Drag a note onto any board.</p>
+        <p className="side-sub">{t('Jot things down from any device — your phone included — and sort them onto a board later. Drag a note onto any board.')}</p>
       ) : (
         <p className="side-sub">
-          A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> to send selected cards here.
+          A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> {t('to send selected cards here.')}
         </p>
       )}
       <div className="inbox-list scrollable">
-        {ids.length === 0 && <div className="trash-empty">{scope === 'quick' ? 'No quick notes yet.' : 'Nothing unsorted on this board.'}</div>}
+        {ids.length === 0 && <div className="trash-empty">{scope === 'quick' ? t('No quick notes yet.') : t('Nothing unsorted on this board.')}</div>}
         {ids.map((id) => (
           <InboxCard key={id} id={id} onPointerDown={onPointerDown} dragging={ghost?.id === id} />
         ))}
@@ -405,7 +406,7 @@ export function InboxPanel({ scope = 'board' }: { scope?: 'board' | 'quick' }) {
         <textarea
           value={draft}
           rows={2}
-          placeholder="Quick note… (Enter to add)"
+          placeholder={t('Quick note… (Enter to add)')}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -415,12 +416,12 @@ export function InboxPanel({ scope = 'board' }: { scope?: 'board' | 'quick' }) {
           }}
         />
         <button onClick={add} disabled={!draft.trim()}>
-          Add
+          {t('Add')}
         </button>
       </div>
       {ghost && (
         <div className="tool-ghost" style={{ left: ghost.x, top: ghost.y }}>
-          {TYPE_LABEL[getState().elements[ghost.id]?.type ?? 'note']}
+          {t(TYPE_LABEL[getState().elements[ghost.id]?.type ?? 'note'])}
         </div>
       )}
     </aside>
@@ -442,7 +443,7 @@ function InboxCard({ id, onPointerDown, dragging }: { id: string; onPointerDown(
             patchElement(id, { section: 'canvas', parentId: getState().boardId, x: Math.round(p.x - 130), y: Math.round(p.y - 60), columnId: null });
           }}
         >
-          Add to board
+          {t('Add to board')}
         </button>
       </div>
     </div>
@@ -465,41 +466,41 @@ export function ExportPanel() {
     }
   };
   return (
-    <aside className="side-panel" aria-label="Export">
+    <aside className="side-panel" aria-label={t('Export')}>
       <div className="side-head">
-        <h2>Export board</h2>
-        <button className="icon-btn" onClick={close} title="Close">
+        <h2>{t('Export board')}</h2>
+        <button className="icon-btn" onClick={close} title={t('Close')}>
           ✕
         </button>
       </div>
       <p className="side-sub">“{title}”</p>
       <div className="export-section">
-        <h3>Export the current board layout</h3>
+        <h3>{t('Export the current board layout')}</h3>
         <button disabled={!!busy} onClick={() => run('png', () => exportBoardPng(boardId, 2))}>
-          {busy === 'png' ? 'Generating…' : 'PNG image'}
+          {busy === 'png' ? t('Generating…') : t('PNG image')}
         </button>
         <button disabled={!!busy} onClick={() => run('pdf', () => exportBoardPng(boardId, 2, true))}>
-          {busy === 'pdf' ? 'Generating…' : 'PDF (print)'}
+          {busy === 'pdf' ? t('Generating…') : t('PDF (print)')}
         </button>
       </div>
       <div className="export-section">
-        <h3>Convert to a linear document</h3>
+        <h3>{t('Convert to a linear document')}</h3>
         <label className="check">
-          <input type="checkbox" checked={subBoards} onChange={(e) => setSubBoards(e.target.checked)} /> Include sub-boards
+          <input type="checkbox" checked={subBoards} onChange={(e) => setSubBoards(e.target.checked)} /> {t('Include sub-boards')}
         </label>
-        <button onClick={() => exportBoardMarkdown(boardId, subBoards)}>Markdown</button>
-        <button onClick={() => exportBoardText(boardId, subBoards)}>Plain text</button>
-        <button onClick={() => exportBoardWord(boardId, subBoards)}>Word document</button>
+        <button onClick={() => exportBoardMarkdown(boardId, subBoards)}>{t('Markdown')}</button>
+        <button onClick={() => exportBoardText(boardId, subBoards)}>{t('Plain text')}</button>
+        <button onClick={() => exportBoardWord(boardId, subBoards)}>{t('Word document')}</button>
       </div>
       <div className="export-section">
-        <h3>Download all images and files</h3>
+        <h3>{t('Download all images and files')}</h3>
         <a className="button-like" href={`/api/board-files/${boardId}`} download>
-          Generate ZIP file
+          {t('Generate ZIP file')}
         </a>
       </div>
       <div className="export-section">
-        <h3>Link</h3>
-        <button onClick={() => copyText(boardUrl(boardId), 'Board link copied')}>Copy a link to this board</button>
+        <h3>{t('Link')}</h3>
+        <button onClick={() => copyText(boardUrl(boardId), 'Board link copied')}>{t('Copy a link to this board')}</button>
       </div>
     </aside>
   );
@@ -537,49 +538,49 @@ export function TemplatesPanel() {
   };
 
   return (
-    <aside className="side-panel" aria-label="Templates">
+    <aside className="side-panel" aria-label={t('Templates')}>
       <div className="side-head">
-        <h2>Choose a template</h2>
-        <button className="icon-btn" onClick={close} title="Close">
+        <h2>{t('Choose a template')}</h2>
+        <button className="icon-btn" onClick={close} title={t('Close')}>
           ✕
         </button>
       </div>
-      <input className="palette-input" placeholder="Search templates..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input className="palette-input" placeholder={t('Search templates...')} value={query} onChange={(e) => setQuery(e.target.value)} />
       <ul className="trash-list scrollable">
         <li>
           <button className="template-row" onClick={() => use(null)}>
-            <span className="board-icon small">▦</span> Empty board
+            <span className="board-icon small">▦</span> {t('Empty board')}
           </button>
         </li>
-        {STARTER_TEMPLATES.filter((t) => t.title.toLowerCase().includes(query.toLowerCase())).map((t) => (
-          <li key={t.id}>
+        {STARTER_TEMPLATES.filter((tpl) => tpl.title.toLowerCase().includes(query.toLowerCase())).map((tpl) => (
+          <li key={tpl.id}>
             <button
               className="template-row"
               onClick={() => {
                 const r = canvasRect();
                 const p = screenToWorld((r?.left ?? 0) + (r?.width ?? 800) / 2, (r?.top ?? 0) + (r?.height ?? 600) / 2);
-                applyStarterTemplate(t.id, { x: p.x - 55, y: p.y - 50 }, keepContent);
+                applyStarterTemplate(tpl.id, { x: p.x - 55, y: p.y - 50 }, keepContent);
                 close();
               }}
-              title={t.description}
+              title={t(tpl.description)}
             >
-              <span className="board-icon small">{t.icon}</span> {t.title}
-              <span className="label-chip small tag-top">Top pick</span>
+              <span className="board-icon small">{tpl.icon}</span> {t(tpl.title)}
+              <span className="label-chip small tag-top">{t('Top pick')}</span>
             </button>
           </li>
         ))}
-        <li className="template-group">Your custom templates</li>
+        <li className="template-group">{t('Your custom templates')}</li>
         {shown.length === 0 && (
-          <li className="trash-empty">{templates.length ? 'No templates found' : 'Right-click any board and choose “Convert to Template” to make your own.'}</li>
+          <li className="trash-empty">{templates.length ? t('No templates found') : t('Right-click any board and choose “Convert to Template” to make your own.')}</li>
         )}
-        {shown.map((t) => (
-          <li key={t.id}>
+        {shown.map((tpl) => (
+          <li key={tpl.id}>
             <div className="template-line">
-              <button className="template-row" onClick={() => use(t)}>
-                <span className="board-icon small">{t.content.icon || '▦'}</span> {t.content.title || 'Untitled template'}
-                <span className="label-usage">{dependents(t.id).length} cards</span>
+              <button className="template-row" onClick={() => use(tpl)}>
+                <span className="board-icon small">{tpl.content.icon || '▦'}</span> {tpl.content.title || t('Untitled template')}
+                <span className="label-usage">{t('{n} cards', { n: dependents(tpl.id).length })}</span>
               </button>
-              <button className="icon-btn small" title="Revert template to board" onClick={() => revertTemplate(t.id, boardId)}>
+              <button className="icon-btn small" title={t('Revert template to board')} onClick={() => revertTemplate(tpl.id, boardId)}>
                 ↩
               </button>
             </div>
@@ -588,7 +589,7 @@ export function TemplatesPanel() {
       </ul>
       <div className="side-foot">
         <label className="check">
-          <input type="checkbox" checked={keepContent} onChange={(e) => setKeepContent(e.target.checked)} /> Keep example content
+          <input type="checkbox" checked={keepContent} onChange={(e) => setKeepContent(e.target.checked)} /> {t('Keep example content')}
         </label>
       </div>
     </aside>
@@ -675,48 +676,52 @@ export function SettingsPanel() {
   };
 
   return (
-    <aside className="side-panel" aria-label="Settings">
+    <aside className="side-panel" aria-label={t('Settings')}>
       <div className="side-head">
-        <h2>Settings</h2>
-        <button className="icon-btn" onClick={close} title="Close">
+        <h2>{t('Settings')}</h2>
+        <button className="icon-btn" onClick={close} title={t('Close')}>
           ✕
         </button>
       </div>
       <div className="export-section">
-        <h3>Appearance</h3>
+        <h3>{t('Appearance')}</h3>
         <div className="menu-row">
-          {(['system', 'light', 'dark'] as const).map((t) => (
-            <button key={t} className={theme === t ? 'active' : ''} onClick={() => setTheme(t)}>
-              {t === 'system' ? 'Match system' : t === 'light' ? 'Light' : 'Dark'}
+          {(['system', 'light', 'dark'] as const).map((mode) => (
+            <button key={mode} className={theme === mode ? 'active' : ''} onClick={() => setTheme(mode)}>
+              {mode === 'system' ? t('Match system') : mode === 'light' ? t('Light') : t('Dark')}
             </button>
           ))}
         </div>
         <label className="check">
-          Interface size
+          {t('Interface size')}
           <input type="range" min="0.8" max="1.4" step="0.1" value={scale} onChange={(e) => applyScale(Number(e.target.value))} />
           <span>{Math.round(scale * 100)}%</span>
         </label>
       </div>
       <div className="export-section">
-        <h3>Localization</h3>
+        <h3>{t('Localization')}</h3>
         <label className="field">
-          Language
-          <select value="en" disabled title="The interface is in English">
-            <option value="en">English</option>
-          </select>
-        </label>
-        <label className="field">
-          Numbers &amp; dates (in tables)
-          <select value={loc.format} onChange={(e) => updateLoc({ format: e.target.value })}>
-            {FORMAT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+          {t('Language')}
+          <select value={getLang()} onChange={(e) => setLang(e.target.value as Lang)}>
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
               </option>
             ))}
           </select>
         </label>
         <label className="field">
-          Currency
+          {t('Numbers & dates (in tables)')}
+          <select value={loc.format} onChange={(e) => updateLoc({ format: e.target.value })}>
+            {FORMAT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value ? o.label : t(o.label)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          {t('Currency')}
           <select value={loc.currency} onChange={(e) => updateLoc({ currency: e.target.value })}>
             {CURRENCY_OPTIONS.map((c) => (
               <option key={c} value={c}>
@@ -726,35 +731,35 @@ export function SettingsPanel() {
           </select>
         </label>
         <label className="field">
-          Time
+          {t('Time')}
           <select value={loc.time} onChange={(e) => updateLoc({ time: e.target.value as LocaleSettings['time'] })}>
-            <option value="">Follow the format above</option>
-            <option value="12">12 hour (e.g. 10:10pm)</option>
-            <option value="24">24 hour (e.g. 22:10)</option>
+            <option value="">{t('Follow the format above')}</option>
+            <option value="12">{t('12 hour (e.g. 10:10pm)')}</option>
+            <option value="24">{t('24 hour (e.g. 22:10)')}</option>
           </select>
         </label>
       </div>
       <div className="export-section">
-        <h3>This board’s background</h3>
+        <h3>{t('This board’s background')}</h3>
         <div className="menu-colors">
           {[null, '#f6f1e7', '#e8eef5', '#eaf3ea', '#f5e9ee', '#ece8f6', '#2b2d31', '#16324f'].map((c) => (
             <button
               key={c ?? 'default'}
               className={`swatch-dot ${c ? '' : 'no-color'} ${(appearance.background ?? null) === c ? 'active' : ''}`}
               style={c ? { background: c } : undefined}
-              title={c ?? 'Revert to default'}
+              title={c ?? t('Revert to default')}
               onClick={() => setBoard({ background: c })}
             />
           ))}
-          <input type="color" value={appearance.background || '#eeece8'} onChange={(e) => setBoard({ background: e.target.value })} title="Choose custom colour" />
+          <input type="color" value={appearance.background || '#eeece8'} onChange={(e) => setBoard({ background: e.target.value })} title={t('Choose custom colour')} />
         </div>
         <label className="check">
-          <input type="checkbox" checked={!appearance.hideGrid} onChange={(e) => setBoard({ hideGrid: !e.target.checked })} /> Show dot grid
+          <input type="checkbox" checked={!appearance.hideGrid} onChange={(e) => setBoard({ hideGrid: !e.target.checked })} /> {t('Show dot grid')}
         </label>
       </div>
       <div className="export-section">
-        <h3>Toolbar</h3>
-        <p className="side-sub">Choose which tools appear in the left toolbar.</p>
+        <h3>{t('Toolbar')}</h3>
+        <p className="side-sub">{t('Choose which tools appear in the left toolbar.')}</p>
         <div className="toolbar-prefs">
           {ALL_TOOL_IDS.map((id) => (
             <label key={id} className="check">
@@ -767,14 +772,14 @@ export function SettingsPanel() {
                   setToolbarPrefs({ hidden });
                 }}
               />
-              {TOOL_LABELS[id]}
+              {t(TOOL_LABELS[id])}
             </label>
           ))}
         </div>
       </div>
       <div className="export-section">
-        <h3>Labels</h3>
-        <button onClick={() => setState({ modal: { kind: 'labels', ids: [] } })}>Manage labels…</button>
+        <h3>{t('Labels')}</h3>
+        <button onClick={() => setState({ modal: { kind: 'labels', ids: [] } })}>{t('Manage labels…')}</button>
       </div>
     </aside>
   );
@@ -877,22 +882,22 @@ const SHORTCUT_SECTIONS: [string, [string, string][]][] = [
 export function ShortcutsPanel() {
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="dialog shortcuts-dialog" role="dialog" aria-label="Keyboard shortcuts">
+      <div className="dialog shortcuts-dialog" role="dialog" aria-label={t('Keyboard shortcuts')}>
         <div className="side-head">
-          <h2>Shortcuts</h2>
-          <button className="icon-btn" onClick={close} title="Close">
+          <h2>{t('Shortcuts')}</h2>
+          <button className="icon-btn" onClick={close} title={t('Close')}>
             ✕
           </button>
         </div>
         <div className="shortcut-sections scrollable">
           {SHORTCUT_SECTIONS.map(([title, rows]) => (
             <section key={title}>
-              <h3>{title}</h3>
+              <h3>{t(title)}</h3>
               <dl className="shortcut-list">
                 {rows.map(([k, v]) => (
                   <div key={k}>
-                    <dt>{k}</dt>
-                    <dd>{v}</dd>
+                    <dt>{t(k)}</dt>
+                    <dd>{t(v)}</dd>
                   </div>
                 ))}
               </dl>

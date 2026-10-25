@@ -13,6 +13,7 @@ import { TableBody } from './Table';
 import { AliasBody, CommentBody, DocumentBody, HeadingBody } from './MoreBodies';
 import { embedFor, LINK_PLACEHOLDERS } from '../embeds';
 import { numLocale } from '../locale';
+import { t } from '../i18n';
 
 interface BodyProps<T extends El['type']> {
   el: ElementOf<T>;
@@ -87,7 +88,7 @@ function NoteBody({ el, editing }: BodyProps<'note'>) {
       {el.content.html ? (
         <div className="rich-text" onClick={openLinkInNote} dangerouslySetInnerHTML={{ __html: el.content.html }} />
       ) : (
-        <div className="rich-text placeholder">Empty note</div>
+        <div className="rich-text placeholder">{t('Empty note')}</div>
       )}
     </div>
   );
@@ -127,22 +128,22 @@ function BoardBody({ el, editing }: BodyProps<'board'>) {
           ref={ref}
           className="board-title-input"
           defaultValue={el.content.title}
-          placeholder="Board name"
+          placeholder={t('Board name')}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (e.target as HTMLInputElement).blur()}
           onBlur={(e) => {
             const raw = e.target.value.trim();
             // A leading emoji becomes the board icon.
             const m = raw.match(/^(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*)\s*(.*)$/u);
             const content = m ? { icon: m[1], title: m[2] || el.content.title } : { title: raw };
-            patchElement(el.id, { content: { ...content, title: content.title || 'Untitled board' } });
+            patchElement(el.id, { content: { ...content, title: content.title || t('Untitled board') } });
             stopEditing();
           }}
         />
       ) : (
-        <div className="board-title">{el.content.title || 'Untitled board'}</div>
+        <div className="board-title">{el.content.title || t('Untitled board')}</div>
       )}
       <div className="board-meta">
-        {el.content.protected ? (el.content.unlocked ? '🔓 Unlocked' : '🔒 Password protected') : counts === 0 ? 'Empty' : `${counts} card${counts === 1 ? '' : 's'}`}
+        {el.content.protected ? (el.content.unlocked ? t('🔓 Unlocked') : t('🔒 Password protected')) : counts === 0 ? t('Empty') : t(counts === 1 ? '1 card' : '{n} cards', { n: counts })}
         {el.content.publicToken ? ' · 🌐 Published' : ''}
       </div>
     </div>
@@ -180,7 +181,7 @@ function ColumnBody({ el, editing }: BodyProps<'column'>) {
             ref={ref}
             className="column-title-input"
             defaultValue={el.content.title}
-            placeholder="Column title"
+            placeholder={t('Column title')}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (e.target as HTMLInputElement).blur()}
             onBlur={(e) => {
               patchElement(el.id, { content: { title: e.target.value.trim() } });
@@ -188,13 +189,13 @@ function ColumnBody({ el, editing }: BodyProps<'column'>) {
             }}
           />
         ) : (
-          <div className={`column-title ${el.content.title ? '' : 'placeholder'}`}>{el.content.title || 'Untitled column'}</div>
+          <div className={`column-title ${el.content.title ? '' : 'placeholder'}`}>{el.content.title || t('Untitled column')}</div>
         )}
         <span className="column-count">{kids.length || ''}</span>
         <button
           data-nodrag
           className="icon-btn small"
-          title={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? t('Expand') : t('Collapse')}
           onClick={() => patchElement(el.id, { content: { collapsed: !collapsed } })}
         >
           {collapsed ? '▸' : '▾'}
@@ -202,7 +203,7 @@ function ColumnBody({ el, editing }: BodyProps<'column'>) {
       </div>
       {!collapsed && (
         <div className="column-body">
-          {kids.length === 0 && dropIndex < 0 && <div className="column-empty">Drag cards here</div>}
+          {kids.length === 0 && dropIndex < 0 && <div className="column-empty">{t('Drag cards here')}</div>}
           {kids.map((id) => {
             const visibleIndex = visible.indexOf(id);
             return (
@@ -273,7 +274,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
             ref={titleRef}
             className="todo-title-input"
             defaultValue={title}
-            placeholder="To-do list"
+            placeholder={t('To-do list')}
             onChange={(e) => patchElement(el.id, { content: { title: e.target.value } }, { coalesce: `todo-title:${el.id}` })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -283,7 +284,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
             }}
           />
         ) : (
-          <div className={`todo-title ${title ? '' : 'placeholder'}`}>{title || 'To-do list'}</div>
+          <div className={`todo-title ${title ? '' : 'placeholder'}`}>{title || t('To-do list')}</div>
         )}
         {total > 0 && (
           <span className="todo-progress" title={`${done} of ${total} done`}>
@@ -299,7 +300,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
               type="checkbox"
               checked={item.done}
               onChange={(e) => updateItem(item.id, { done: e.target.checked }, false)}
-              aria-label="Done"
+              aria-label={t('Done')}
             />
             {editing ? (
               <AutoInput
@@ -310,7 +311,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
                 onKeyDown={(e) => onItemKey(e, item, index)}
               />
             ) : (
-              <span className={`todo-text ${item.text ? '' : 'placeholder'}`}>{item.text || 'Empty task'}</span>
+              <span className={`todo-text ${item.text ? '' : 'placeholder'}`}>{item.text || t('Empty task')}</span>
             )}
             <DueDate item={item} editing={editing} onChange={(due) => updateItem(item.id, { due }, false)} />
           </li>
@@ -325,7 +326,7 @@ function TodoBody({ el, editing }: BodyProps<'todo'>) {
             setFocusId(fresh.id);
           }}
         >
-          + Add task
+          {t('+ Add task')}
         </button>
       )}
     </div>
@@ -350,13 +351,13 @@ function DueDate({ item, editing, onChange }: { item: TodoItem; editing: boolean
         autoFocus={open && !item.due}
         onChange={(e) => onChange(e.target.value || null)}
         onBlur={() => setOpen(false)}
-        title="Due date"
+        title={t('Due date')}
       />
     );
   }
   if (editing) {
     return (
-      <button data-nodrag className="due-add" title="Set due date" onClick={() => setOpen(true)}>
+      <button data-nodrag className="due-add" title={t('Set due date')} onClick={() => setOpen(true)}>
         📅
       </button>
     );
@@ -394,7 +395,7 @@ function AutoInput({
       onFocused();
     }
   }, [focus, onFocused]);
-  return <input ref={ref} className="todo-input" value={value} placeholder="Task" onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} />;
+  return <input ref={ref} className="todo-input" value={value} placeholder={t('Task')} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} />;
 }
 
 // ---------------------------------------------------------------- image
@@ -418,7 +419,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
         }}
       >
         <span className="placeholder-icon">＋</span>
-        <span>Add an image or file</span>
+        <span>{t('Add an image or file')}</span>
       </div>
     );
   }
@@ -442,7 +443,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
           ref={ref}
           className="caption-input"
           defaultValue={el.content.caption ?? ''}
-          placeholder="Add a caption"
+          placeholder={t('Add a caption')}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (e.target as HTMLInputElement).blur()}
           onBlur={(e) => {
             patchElement(el.id, { content: { caption: e.target.value.trim() } });
@@ -502,11 +503,11 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
             referrerPolicy="strict-origin-when-cross-origin"
             style={{ pointerEvents: selected ? 'auto' : 'none' }}
           />
-          {!selected && <div className="embed-shield" title="Click to select, then use the player" />}
+          {!selected && <div className="embed-shield" title={t('Click to select, then use the player')} />}
         </div>
         <div className="link-site embed-bar">
           <span>{title && !loading ? title : site || hostOf(url)}</span>
-          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title="Open link">
+          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
             ↗
           </a>
         </div>
@@ -526,7 +527,7 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
         <div className="link-site">
           <img className="favicon" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostOf(url))}&sz=32`} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
           <span>{site || hostOf(url)}</span>
-          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title="Open link">
+          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
             ↗
           </a>
         </div>
@@ -549,7 +550,7 @@ function SwatchBody({ el, editing }: BodyProps<'swatch'>) {
             type="color"
             value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#000000'}
             onChange={(e) => patchElement(el.id, { content: { hex: e.target.value } }, { coalesce: `swatch:${el.id}` })}
-            title="Pick colour"
+            title={t('Pick colour')}
           />
         )}
       </div>
@@ -559,7 +560,7 @@ function SwatchBody({ el, editing }: BodyProps<'swatch'>) {
             ref={ref}
             className="swatch-name-input"
             defaultValue={name ?? ''}
-            placeholder="Name"
+            placeholder={t('Name')}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (e.target as HTMLInputElement).blur()}
             onBlur={(e) => {
               patchElement(el.id, { content: { name: e.target.value.trim() } });
@@ -613,7 +614,7 @@ function FileBody({ el }: BodyProps<'file'>) {
       )}
       {mime === 'application/pdf' && (
         <a data-nodrag className="file-preview-link" href={src} target="_blank" rel="noopener">
-          Preview PDF ↗
+          {t('Preview PDF ↗')}
         </a>
       )}
       <div className="file-row">
@@ -626,7 +627,7 @@ function FileBody({ el }: BodyProps<'file'>) {
         </div>
         <div className="file-size">{formatSize(size)}</div>
       </div>
-        <a data-nodrag className="icon-btn small" href={src} download={name} title="Download">
+        <a data-nodrag className="icon-btn small" href={src} download={name} title={t('Download')}>
           ⤓
         </a>
       </div>

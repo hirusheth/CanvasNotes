@@ -8,6 +8,7 @@ import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style';
 import { setState } from '../store';
+import { t } from '../i18n';
 
 // "! " at the start of a line makes a callout box, as in Milanote.
 const Callout = Node.create({
@@ -174,7 +175,7 @@ function FormatBar({ editor }: { editor: Editor }) {
   const btn = (label: React.ReactNode, title: string, active: boolean, run: () => void, cls = '') => (
     <button
       type="button"
-      title={title}
+      title={t(title)}
       className={`${active ? 'active' : ''} ${cls}`}
       onMouseDown={(e) => {
         e.preventDefault();
@@ -198,8 +199,8 @@ function FormatBar({ editor }: { editor: Editor }) {
             : editor.isActive('codeBlock')
               ? 'Code block'
               : editor.isActive('small')
-                ? 'Small text'
-                : 'Normal text';
+                ? t('Small text')
+                : t('Normal text');
 
   const styles: [string, () => void, boolean][] = [
     ['Normal text', () => chain().setParagraph().unsetMark('small').run(), styleLabel === 'Normal text'],
@@ -220,7 +221,7 @@ function FormatBar({ editor }: { editor: Editor }) {
           <div className="fb-pop">
             {styles.map(([label, run, active]) => (
               <button key={label} className={active ? 'active' : ''} onMouseDown={(e) => (e.preventDefault(), run(), setPop(null))}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -230,7 +231,7 @@ function FormatBar({ editor }: { editor: Editor }) {
         {btn('Aa', 'Font and size', pop === 'font', () => toggle('font'))}
         {pop === 'font' && (
           <div className="fb-pop fb-fonts">
-            <div className="menu-label">Font</div>
+            <div className="menu-label">{t('Font')}</div>
             {FONTS.map((f) => (
               <button
                 key={f.label}
@@ -241,7 +242,7 @@ function FormatBar({ editor }: { editor: Editor }) {
                 {f.label}
               </button>
             ))}
-            <div className="menu-label">Size</div>
+            <div className="menu-label">{t('Size')}</div>
             <div className="fb-row">
               {SIZES.map((size) => (
                 <button
@@ -265,16 +266,16 @@ function FormatBar({ editor }: { editor: Editor }) {
         {btn(<span className="fb-color-a">A</span>, 'Text colour & highlight', pop === 'color', () => toggle('color'))}
         {pop === 'color' && (
           <div className="fb-pop fb-colors">
-            <div className="menu-label">Colour</div>
+            <div className="menu-label">{t('Colour')}</div>
             <div className="menu-colors">
-              <button className="swatch-dot no-color" title="Default" onMouseDown={(e) => (e.preventDefault(), chain().unsetColor().run())} />
+              <button className="swatch-dot no-color" title={t('Default')} onMouseDown={(e) => (e.preventDefault(), chain().unsetColor().run())} />
               {TEXT_COLORS.map((c) => (
                 <button key={c} className="swatch-dot" style={{ background: c }} onMouseDown={(e) => (e.preventDefault(), chain().setColor(c).run())} />
               ))}
             </div>
-            <div className="menu-label">Highlight</div>
+            <div className="menu-label">{t('Highlight')}</div>
             <div className="menu-colors">
-              <button className="swatch-dot no-color" title="None" onMouseDown={(e) => (e.preventDefault(), chain().unsetHighlight().run())} />
+              <button className="swatch-dot no-color" title={t('None')} onMouseDown={(e) => (e.preventDefault(), chain().unsetHighlight().run())} />
               {HIGHLIGHTS.map((c) => (
                 <button key={c} className="swatch-dot" style={{ background: c }} onMouseDown={(e) => (e.preventDefault(), chain().setHighlight({ color: c }).run())} />
               ))}
@@ -302,7 +303,7 @@ function FormatBar({ editor }: { editor: Editor }) {
           <div className="fb-pop fb-row">
             {(['left', 'center', 'right'] as const).map((a) => (
               <button key={a} className={editor.isActive({ textAlign: a }) ? 'active' : ''} onMouseDown={(e) => (e.preventDefault(), chain().setTextAlign(a).run(), setPop(null))}>
-                {a === 'left' ? 'Left' : a === 'center' ? 'Center' : 'Right'}
+                {a === 'left' ? 'Left' : a === 'center' ? t('Center') : t('Right')}
               </button>
             ))}
           </div>

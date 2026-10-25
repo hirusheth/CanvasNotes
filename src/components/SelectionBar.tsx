@@ -3,6 +3,7 @@ import { duplicate } from '../actions';
 import { openDrawing } from '../elements/Sketch';
 import { openDocument } from '../elements/MoreBodies';
 import type { MenuState } from './ContextMenu';
+import { t } from '../i18n';
 
 const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
@@ -30,26 +31,26 @@ export function SelectionBar({ onMenu }: { onMenu(menu: MenuState): void }) {
       : single.type === 'sketch'
         ? 'Draw'
         : single.type === 'image' || single.type === 'file'
-          ? 'View'
-          : 'Edit';
+          ? t('View')
+          : t('Edit');
 
   return (
     <div className="selection-bar" onPointerDown={(e) => e.stopPropagation()}>
       <span className="sel-count">{selection.length} selected</span>
       {openLabel && <button onClick={open}>{openLabel}</button>}
-      <button onClick={() => duplicate()}>Duplicate</button>
+      <button onClick={() => duplicate()}>{t('Duplicate')}</button>
       <button
         onClick={(e) => {
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
           onMenu({ x: r.left, y: r.top - 8, targetIds: getState().selection });
         }}
       >
-        More
+        {t('More')}
       </button>
       <button className="danger" onClick={() => trashElements(getState().selection)}>
-        Delete
+        {t('Delete')}
       </button>
-      <button onClick={() => setState({ selection: [] })} aria-label="Done">
+      <button onClick={() => setState({ selection: [] })} aria-label={t('Done')}>
         ✕
       </button>
     </div>

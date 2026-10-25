@@ -5,6 +5,7 @@ import type { ElementType } from '../types';
 import { isOverCanvas, screenToWorld } from '../viewport';
 import { getToolbarPrefs, onToolbarPrefs, type ToolId, TOOL_LABELS } from './toolbarPrefs';
 import { newFolder } from '../moreActions';
+import { t } from '../i18n';
 
 interface Tool {
   id: ToolId;
@@ -125,33 +126,33 @@ export function Toolbar() {
 
   return (
     <>
-      <nav className="toolbar" aria-label="Add to board">
+      <nav className="toolbar" aria-label={t('Add to board')}>
         {TOOLS.filter((t) => !prefs.hidden.includes(t.id)).map((tool) => (
           <button
             key={tool.id}
             className={`tool ${activeTool === tool.type ? 'active' : ''}`}
-            title={`${tool.hint} — click or drag onto the board`}
+            title={t('{hint} — click or drag onto the board', { hint: t(tool.hint) })}
             onPointerDown={(e) => onPointerDown(e, tool)}
             onClick={() => onClick(tool)}
           >
             {tool.icon}
-            <span>{TOOL_LABELS[tool.id]}</span>
+            <span>{t(TOOL_LABELS[tool.id])}</span>
           </button>
         ))}
-        <button className="tool tool-more" title="Choose which tools to show" onClick={() => togglePanel('settings')}>
+        <button className="tool tool-more" title={t('Choose which tools to show')} onClick={() => togglePanel('settings')}>
           <I d="M5 12h.01M12 12h.01M19 12h.01" />
-          <span>More</span>
+          <span>{t('More')}</span>
         </button>
         <div className="toolbar-spacer" />
-        <button className={`tool ${panel === 'templates' ? 'active' : ''}`} title="Templates" onClick={() => togglePanel('templates')}>
+        <button className={`tool ${panel === 'templates' ? 'active' : ''}`} title={t('Templates')} onClick={() => togglePanel('templates')}>
           <I><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" /></I>
-          <span>Templates</span>
+          <span>{t('Templates')}</span>
         </button>
-        <button className={`tool ${panel === 'inbox' ? 'active' : ''}`} title="Unsorted (U moves selected cards here)" onClick={() => togglePanel('inbox')}>
+        <button className={`tool ${panel === 'inbox' ? 'active' : ''}`} title={t('Unsorted (U moves selected cards here)')} onClick={() => togglePanel('inbox')}>
           <I d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5" />
           <span>Unsorted{inboxCount ? ` ${inboxCount}` : ''}</span>
         </button>
-        <button className={`tool ${panel === 'trash' ? 'active' : ''}`} title="Trash" onClick={() => togglePanel('trash')}>
+        <button className={`tool ${panel === 'trash' ? 'active' : ''}`} title={t('Trash')} onClick={() => togglePanel('trash')}>
           <I d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
           <span>Trash{trashCount ? ` ${trashCount}` : ''}</span>
         </button>
@@ -159,7 +160,7 @@ export function Toolbar() {
       {ghost && (
         <div className="tool-ghost" style={{ left: ghost.x, top: ghost.y }}>
           {ghost.tool.icon}
-          <span>{TOOL_LABELS[ghost.tool.id]}</span>
+          <span>{t(TOOL_LABELS[ghost.tool.id])}</span>
         </div>
       )}
     </>

@@ -8,6 +8,7 @@ import { downloadText, htmlToMarkdown, htmlToWordDoc, printHtml, safeFileName } 
 import { htmlToText, pickFiles } from '../actions';
 import * as api from '../api';
 import { AiIdeasModal, BoardPasswordModal, CropModal, FileInfoModal, ImageSearchModal } from './MoreModals';
+import { t } from '../i18n';
 
 const close = () => setState({ modal: null });
 
@@ -62,47 +63,47 @@ function DocumentModal({ id }: { id: string }) {
   const words = wordCount(html);
   const name = safeFileName(title || 'document');
   const exports: [string, () => void][] = [
-    ['Markdown', () => downloadText(`${name}.md`, `# ${title || 'Untitled'}\n\n${htmlToMarkdown(html)}\n`, 'text/markdown')],
+    ['Markdown', () => downloadText(`${name}.md`, `# ${title || t('Untitled')}\n\n${htmlToMarkdown(html)}\n`, 'text/markdown')],
     ['Plain text', () => downloadText(`${name}.txt`, `${title}\n\n${htmlToText(html)}\n`)],
     ['Word document', () => downloadText(`${name}.doc`, htmlToWordDoc(title, `<h1>${title}</h1>${html}`), 'application/msword')],
     ['PDF (print)', () => printHtml(title || 'Document', `<h1>${title}</h1>${html}`)],
   ];
   return (
     <div className="overlay doc-overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="doc-sheet" role="dialog" aria-label="Document">
+      <div className="doc-sheet" role="dialog" aria-label={t('Document')}>
         <div className="doc-sheet-bar">
           <span className="doc-sheet-meta">
             {words} word{words === 1 ? '' : 's'}
           </span>
           <div className="menu-anchor">
             <button className="ghost-btn" onClick={() => setExportOpen((o) => !o)}>
-              Export as…
+              {t('Export as…')}
             </button>
             {exportOpen && (
               <div className="menu dropdown" role="menu">
                 {exports.map(([label, fn]) => (
                   <button key={label} onClick={() => (fn(), setExportOpen(false))}>
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
             )}
           </div>
           <button className="primary" onClick={close}>
-            Close
+            {t('Close')}
           </button>
         </div>
         <input
           className="doc-sheet-title"
           defaultValue={title}
-          placeholder="New Document"
+          placeholder={t('New Document')}
           autoFocus={!title}
           onChange={(e) => patchElement(id, { content: { title: e.target.value } }, { coalesce: `doc-title:${id}` })}
         />
         <div className="doc-sheet-body">
           <RichText
             html={html}
-            placeholder="Start typing…"
+            placeholder={t('Start typing…')}
             autofocus={!!title}
             onChange={(next) => patchElement(id, { content: { html: next } }, { coalesce: `doc:${id}` })}
             onDone={close}
@@ -173,17 +174,17 @@ function LabelsModal({ ids }: { ids: string[] }) {
 
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="dialog labels-dialog" role="dialog" aria-label="Labels">
+      <div className="dialog labels-dialog" role="dialog" aria-label={t('Labels')}>
         <div className="side-head">
-          <h2>Labels</h2>
-          <button className="icon-btn" onClick={close} title="Close">
+          <h2>{t('Labels')}</h2>
+          <button className="icon-btn" onClick={close} title={t('Close')}>
             ✕
           </button>
         </div>
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="Enter label name..."
+          placeholder={t('Enter label name...')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -194,7 +195,7 @@ function LabelsModal({ ids }: { ids: string[] }) {
           }}
         />
         <ul className="label-list scrollable">
-          {labels.length === 0 && !query && <li className="palette-empty">Labels let you visually categorise your content.</li>}
+          {labels.length === 0 && !query && <li className="palette-empty">{t('Labels let you visually categorise your content.')}</li>}
           {shown.map((l) => (
             <li key={l.id}>
               {editing === l.id ? (
@@ -208,7 +209,7 @@ function LabelsModal({ ids }: { ids: string[] }) {
                     </span>
                   </label>
                   <span className="label-usage">{labelUsage(l.id)} cards</span>
-                  <button className="icon-btn small" onClick={() => setEditing(l.id)} title="Edit label">
+                  <button className="icon-btn small" onClick={() => setEditing(l.id)} title={t('Edit label')}>
                     ✎
                   </button>
                 </div>
@@ -250,16 +251,16 @@ function LabelEditor({ label, onDone }: { label: ElementOf<'label'>; onDone(): v
       <div className="trash-actions">
         {confirm ? (
           <>
-            <span>Delete this label?</span>
+            <span>{t('Delete this label?')}</span>
             <button className="danger solid" onClick={remove}>
-              Yes
+              {t('Yes')}
             </button>
-            <button onClick={() => setConfirm(false)}>No</button>
+            <button onClick={() => setConfirm(false)}>{t('No')}</button>
           </>
         ) : (
           <>
             <button className="danger" onClick={() => setConfirm(true)}>
-              Delete
+              {t('Delete')}
             </button>
             <button
               onClick={() => {
@@ -267,7 +268,7 @@ function LabelEditor({ label, onDone }: { label: ElementOf<'label'>; onDone(): v
                 onDone();
               }}
             >
-              Done
+              {t('Done')}
             </button>
           </>
         )}
@@ -289,14 +290,14 @@ function IconModal({ id }: { id: string }) {
   const letters = query.trim().slice(0, 2).toUpperCase();
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="dialog icon-dialog" role="dialog" aria-label="Board icon">
+      <div className="dialog icon-dialog" role="dialog" aria-label={t('Board icon')}>
         <div className="side-head">
-          <h2>Icon</h2>
-          <button className="icon-btn" onClick={close} title="Close">
+          <h2>{t('Icon')}</h2>
+          <button className="icon-btn" onClick={close} title={t('Close')}>
             ✕
           </button>
         </div>
-        <input className="palette-input" placeholder="Type letters, numbers or paste an emoji" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="palette-input" placeholder={t('Type letters, numbers or paste an emoji')} value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="icon-grid">
           {letters && (
             <button onClick={() => (set({ icon: query.trim().slice(0, 2), iconImage: null }), close())} className="icon-letters">
@@ -319,9 +320,9 @@ function IconModal({ id }: { id: string }) {
               })
             }
           >
-            Upload an image (160 × 160 works best)
+            {t('Upload an image (160 × 160 works best)')}
           </button>
-          <button onClick={() => (set({ icon: '', iconImage: null }), close())}>Use default</button>
+          <button onClick={() => (set({ icon: '', iconImage: null }), close())}>{t('Use default')}</button>
         </div>
       </div>
     </div>
@@ -334,18 +335,18 @@ function BoardLinkModal({ onPick }: { onPick: (boardId: string, title: string) =
   const [query, setQuery] = useState('');
   const elements = useStore((s) => s.elements);
   useEscape(close);
-  const boards = [{ id: ROOT_ID, title: 'Home' }].concat(
+  const boards = [{ id: ROOT_ID, title: t('Home') }].concat(
     Object.values(elements)
       .filter((e): e is ElementOf<'board'> => e.type === 'board' && e.section === 'canvas' && e.parentId !== LABELS_PARENT && e.id !== ROOT_ID)
-      .map((b) => ({ id: b.id, title: b.content.title || 'Untitled board' })),
+      .map((b) => ({ id: b.id, title: b.content.title || t('Untitled board') })),
   );
   const shown = boards.filter((b) => b.title.toLowerCase().includes(query.toLowerCase()));
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="palette" role="dialog" aria-label="Link to board">
-        <input className="palette-input" autoFocus placeholder="Search board..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="palette" role="dialog" aria-label={t('Link to board')}>
+        <input className="palette-input" autoFocus placeholder={t('Search board...')} value={query} onChange={(e) => setQuery(e.target.value)} />
         <ul className="palette-results scrollable">
-          {shown.length === 0 && <li className="palette-empty">No boards found</li>}
+          {shown.length === 0 && <li className="palette-empty">{t('No boards found')}</li>}
           {shown.map((b) => (
             <li key={b.id}>
               <button
@@ -354,7 +355,7 @@ function BoardLinkModal({ onPick }: { onPick: (boardId: string, title: string) =
                   onPick(b.id, b.title);
                 }}
               >
-                <span className="type-pill type-board">Board</span>
+                <span className="type-pill type-board">{t('Board')}</span>
                 <span className="result-text">{b.title}</span>
                 <span className="result-where">{boardPath(b.id).slice(0, -1).map((p) => p.title).join(' / ')}</span>
               </button>

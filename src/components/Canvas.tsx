@@ -39,6 +39,7 @@ import { LinesLayer, type LineDraft } from './LinesLayer';
 import { ContextMenu, type MenuState } from './ContextMenu';
 import { SelectionBar } from './SelectionBar';
 import { ElementBody } from '../elements/ElementBody';
+import { t } from '../i18n';
 
 type Gesture =
   | { kind: 'pan'; startX: number; startY: number; vx: number; vy: number; touchTap?: { t0: number; moved: boolean } }
@@ -780,10 +781,10 @@ export function Canvas() {
         {locked && (
           <div className="lock-screen" onPointerDown={(e) => e.stopPropagation()}>
             <div className="lock-icon">🔒</div>
-            <h2>This board is password protected</h2>
-            <p>Enter password to view this board.</p>
+            <h2>{t('This board is password protected')}</h2>
+            <p>{t('Enter password to view this board.')}</p>
             <button className="primary" onClick={() => setState({ modal: { kind: 'boardPassword', id: boardId, mode: 'unlock' } })}>
-              Unlock board
+              {t('Unlock board')}
             </button>
           </div>
         )}
@@ -817,11 +818,11 @@ function endPoint(end: LineEnd) {
 function EmptyBoardHint() {
   return (
     <div className="empty-hint">
-      <h2>This board is empty</h2>
+      <h2>{t('This board is empty')}</h2>
       {matchMedia('(pointer: coarse)').matches ? (
-        <p>Double-tap anywhere to write a note, or tap a tool below. Pinch to zoom, drag with one finger to move around, and press and hold a card to move it.</p>
+        <p>{t('Double-tap anywhere to write a note, or tap a tool below. Pinch to zoom, drag with one finger to move around, and press and hold a card to move it.')}</p>
       ) : (
-        <p>Double-click anywhere to write a note, drag a tool in from the left, or drop images, files and links here.</p>
+        <p>{t('Double-click anywhere to write a note, drag a tool in from the left, or drop images, files and links here.')}</p>
       )}
     </div>
   );

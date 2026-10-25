@@ -3,6 +3,7 @@ import { getState, patchElement, setState, startEditing, syncedCount, uid, useSt
 import { CAPTION_TYPES, type El, type ElementOf } from '../types';
 import { htmlToText } from '../actions';
 import { hour12, numLocale } from '../locale';
+import { t } from '../i18n';
 
 const stopEditing = () => startEditing(null);
 
@@ -23,7 +24,7 @@ export function HeadingBody({ el, editing }: { el: ElementOf<'heading'>; editing
         ref={ref}
         className={`heading heading-${size} heading-input`}
         defaultValue={el.content.text}
-        placeholder="Heading"
+        placeholder={t('Heading')}
         rows={1}
         onInput={(e) => {
           const t = e.currentTarget;
@@ -43,7 +44,7 @@ export function HeadingBody({ el, editing }: { el: ElementOf<'heading'>; editing
       />
     );
   }
-  return <div className={`heading heading-${size} ${el.content.text ? '' : 'placeholder'}`}>{el.content.text || 'Heading'}</div>;
+  return <div className={`heading heading-${size} ${el.content.text ? '' : 'placeholder'}`}>{el.content.text || t('Heading')}</div>;
 }
 
 // ---------------------------------------------------------------- board shortcut (alias)
@@ -58,12 +59,12 @@ export function AliasBody({ el }: { el: ElementOf<'alias'> }) {
         <span className="board-icon">
           {board?.content.iconImage ? <img src={board.content.iconImage} alt="" draggable={false} /> : board?.content.icon || '▦'}
         </span>
-        <span className="alias-badge" title="Shortcut">
+        <span className="alias-badge" title={t('Shortcut')}>
           ↪
         </span>
       </div>
-      <div className="board-title">{missing ? 'Board not found' : board!.content.title || 'Untitled board'}</div>
-      <div className="board-meta">Shortcut</div>
+      <div className="board-title">{missing ? 'Board not found' : board!.content.title || t('Untitled board')}</div>
+      <div className="board-meta">{t('Shortcut')}</div>
     </div>
   );
 }
@@ -102,18 +103,18 @@ export function CommentBody({ el, editing }: { el: ElementOf<'comment'>; editing
     <div className="card comment-card">
       <div className="comment-head">
         <span className="comment-icon">💬</span>
-        <span>{comments.length ? `${comments.length} comment${comments.length === 1 ? '' : 's'}` : 'Comment'}</span>
+        <span>{comments.length ? t(comments.length === 1 ? '1 comment' : '{n} comments', { n: comments.length }) : t('Comment')}</span>
       </div>
       <ul className="comment-list">
         {comments.map((c, i) => (
           <li key={c.id}>
             <div className="comment-meta">
-              <strong>{i === 0 ? 'You' : 'Reply'}</strong> · {timeLabel(c.at)}
+              <strong>{i === 0 ? t('You') : t('Reply')}</strong> · {timeLabel(c.at)}
               {c.editedAt ? ' · edited' : ''}
               {editing && (
                 <span className="comment-tools" data-nodrag>
-                  <button onClick={() => (setEditId(c.id), setDraft(c.text), inputRef.current?.focus())}>Edit</button>
-                  <button onClick={() => patchElement(el.id, { content: { comments: comments.filter((x) => x.id !== c.id) } })}>Delete</button>
+                  <button onClick={() => (setEditId(c.id), setDraft(c.text), inputRef.current?.focus())}>{t('Edit')}</button>
+                  <button onClick={() => patchElement(el.id, { content: { comments: comments.filter((x) => x.id !== c.id) } })}>{t('Delete')}</button>
                 </span>
               )}
             </div>
@@ -129,7 +130,7 @@ export function CommentBody({ el, editing }: { el: ElementOf<'comment'>; editing
                 ref={inputRef}
                 value={draft}
                 rows={2}
-                placeholder={editId ? 'Update your comment…' : comments.length ? 'Reply…' : 'Write a comment…'}
+                placeholder={editId ? 'Update your comment…' : comments.length ? t('Reply…') : t('Write a comment…')}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -139,11 +140,11 @@ export function CommentBody({ el, editing }: { el: ElementOf<'comment'>; editing
                 }}
               />
               <button className="primary" onClick={send} disabled={!draft.trim()}>
-                {editId ? 'Save' : comments.length ? 'Reply' : 'Send'}
+                {editId ? 'Save' : comments.length ? t('Reply') : t('Send')}
               </button>
             </>
           ) : (
-            <div className="placeholder">Write a comment…</div>
+            <div className="placeholder">{t('Write a comment…')}</div>
           )}
         </div>
       )}
@@ -170,7 +171,7 @@ export function DocumentBody({ el }: { el: ElementOf<'document'> }) {
         </svg>
       </div>
       <div className="doc-text">
-        <div className={`doc-title ${el.content.title ? '' : 'placeholder'}`}>{el.content.title || 'New Document'}</div>
+        <div className={`doc-title ${el.content.title ? '' : 'placeholder'}`}>{el.content.title || t('New Document')}</div>
         <div className="doc-excerpt">{text ? text.slice(0, 160) : 'Double-click to start typing'}</div>
         <div className="doc-meta">
           {words} word{words === 1 ? '' : 's'}
@@ -211,14 +212,14 @@ export function CardExtras({ el }: { el: El }) {
       {reactions.length > 0 && (
         <div className="reaction-row" data-nodrag>
           {reactions.map((r) => (
-            <button key={r} className="reaction" title="Remove reaction" onClick={() => patchElement(el.id, { reactions: reactions.filter((x) => x !== r) })}>
+            <button key={r} className="reaction" title={t('Remove reaction')} onClick={() => patchElement(el.id, { reactions: reactions.filter((x) => x !== r) })}>
               {r}
             </button>
           ))}
         </div>
       )}
       {el.locked && (
-        <span className="lock-badge" title="Position locked">
+        <span className="lock-badge" title={t('Position locked')}>
           🔒
         </span>
       )}
@@ -254,7 +255,7 @@ function CaptionInput({ el }: { el: El }) {
       className="card-caption caption-edit"
       data-nodrag
       defaultValue={el.caption ?? ''}
-      placeholder="Add a description"
+      placeholder={t('Add a description')}
       rows={2}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {

@@ -3,6 +3,7 @@ import { boardPath, getState, navigate, patchElement, redo, setState, setTheme, 
 import { allRects, fitRects, getViewport, setViewport, useViewport, zoomAt } from '../viewport';
 import { ROOT_ID, type El } from '../types';
 import * as api from '../api';
+import { t } from '../i18n';
 
 export function TopBar() {
   const boardId = useStore((s) => s.boardId);
@@ -22,13 +23,13 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="brand" onClick={() => navigate(ROOT_ID)} title="Home">
+      <div className="brand" onClick={() => navigate(ROOT_ID)} title={t('Home')}>
         <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden>
           <rect x="3" y="5" width="12" height="16" rx="2.5" fill="#f4c95d" />
           <rect x="17" y="9" width="12" height="18" rx="2.5" fill="#61a5c2" />
         </svg>
       </div>
-      <nav className="crumbs" aria-label="Boards">
+      <nav className="crumbs" aria-label={t('Boards')}>
         {trail.map((b, i) => {
           const last = i === trail.length - 1;
           if (last && renaming && b.id !== ROOT_ID) {
@@ -64,54 +65,54 @@ export function TopBar() {
       </nav>
       <div className="topbar-right">
         <span className={`save-status ${saveStatus}`} title={saveStatus === 'error' ? 'Retrying — the server could not be reached' : undefined}>
-          {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving…' : 'Offline, retrying'}
+          {saveStatus === 'saved' ? t('Saved') : saveStatus === 'saving' ? t('Saving…') : t('Offline, retrying')}
         </span>
         <div className="btn-group">
-          <button className="icon-btn" disabled={!canUndo} onClick={undo} title="Undo (Ctrl Z)">
+          <button className="icon-btn" disabled={!canUndo} onClick={undo} title={t('Undo (Ctrl Z)')}>
             ↶
           </button>
-          <button className="icon-btn" disabled={!canRedo} onClick={redo} title="Redo (Ctrl Shift Z)">
+          <button className="icon-btn" disabled={!canRedo} onClick={redo} title={t('Redo (Ctrl Shift Z)')}>
             ↷
           </button>
         </div>
         <div className="btn-group zoom">
-          <button className="icon-btn" onClick={() => zoomAt(boardId, 1 / 1.2)} title="Zoom out (Ctrl −)">
+          <button className="icon-btn" onClick={() => zoomAt(boardId, 1 / 1.2)} title={t('Zoom out (Ctrl −)')}>
             −
           </button>
-          <button className="zoom-level" onClick={() => setViewport(boardId, { ...getViewport(boardId), zoom: 1 })} title="Reset to 100%">
+          <button className="zoom-level" onClick={() => setViewport(boardId, { ...getViewport(boardId), zoom: 1 })} title={t('Reset to 100%')}>
             {Math.round(vp.zoom * 100)}%
           </button>
-          <button className="icon-btn" onClick={() => zoomAt(boardId, 1.2)} title="Zoom in (Ctrl +)">
+          <button className="icon-btn" onClick={() => zoomAt(boardId, 1.2)} title={t('Zoom in (Ctrl +)')}>
             +
           </button>
-          <button className="icon-btn" onClick={() => fitRects(boardId, [...allRects().values()])} title="Fit everything (Shift 1)">
+          <button className="icon-btn" onClick={() => fitRects(boardId, [...allRects().values()])} title={t('Fit everything (Shift 1)')}>
             ⤢
           </button>
         </div>
-        <button className="icon-btn quick-btn" onClick={() => setState({ panel: getState().panel === 'quick' ? null : 'quick' })} title="Quick notes (from any device)">
+        <button className="icon-btn quick-btn" onClick={() => setState({ panel: getState().panel === 'quick' ? null : 'quick' })} title={t('Quick notes (from any device)')}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 4h10l4 4v12H5z" />
             <path d="M9 12h6M9 16h4M12 8v0" />
           </svg>
         </button>
-        <button className="icon-btn hide-sm" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title="Export board">
+        <button className="icon-btn hide-sm" onClick={() => setState({ panel: getState().panel === 'export' ? null : 'export' })} title={t('Export board')}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
           </svg>
         </button>
-        <button className="icon-btn hide-sm" onClick={() => setState({ presenting: true, selection: [], editingId: null, panel: null })} title="Presentation mode (Ctrl Shift P)">
+        <button className="icon-btn hide-sm" onClick={() => setState({ presenting: true, selection: [], editingId: null, panel: null })} title={t('Presentation mode (Ctrl Shift P)')}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
             <rect x="3" y="4" width="18" height="13" rx="2" />
             <path d="M10 8v5l4-2.5zM8 21h8M12 17v4" />
           </svg>
         </button>
-        <button className="search-btn" onClick={() => setState({ panel: 'search' })} title="Search (Ctrl K)">
+        <button className="search-btn" onClick={() => setState({ panel: 'search' })} title={t('Search (Ctrl K)')}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="11" cy="11" r="7" />
             <path d="M20 20l-4-4" />
           </svg>
-          <span>Search</span>
-          <kbd>Ctrl K</kbd>
+          <span>{t('Search')}</span>
+          <kbd>{t('Ctrl K')}</kbd>
         </button>
         <button
           className="icon-btn hide-sm"
@@ -135,7 +136,7 @@ export function TopBar() {
           </svg>
         </button>
         <div className="menu-anchor">
-          <button className="icon-btn" onClick={() => setMenuOpen((o) => !o)} title="More">
+          <button className="icon-btn" onClick={() => setMenuOpen((o) => !o)} title={t('More')}>
             ⋯
           </button>
           {menuOpen && <MoreMenu onClose={() => setMenuOpen(false)} />}
@@ -171,7 +172,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
         );
         await api.importElements(elements, replace ? 'replace' : 'merge');
         await load();
-        toast(`Imported ${elements.length} items`);
+        toast(t('Imported {n} items', { n: elements.length }));
       } catch (err) {
         toast(`Import failed: ${err instanceof Error ? err.message : err}`);
       }
@@ -182,7 +183,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
   return (
     <div ref={ref} className="menu dropdown" role="menu">
       <a className="menu-link" href="/api/export" download onClick={onClose}>
-        Export backup (JSON)
+        {t('Export backup (JSON)')}
       </a>
       <button
         onClick={() => {
@@ -190,7 +191,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           importFile();
         }}
       >
-        Import backup…
+        {t('Import backup…')}
       </button>
       <div className="menu-sep" />
       {(
@@ -209,7 +210,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
             setState({ panel });
           }}
         >
-          {label}
+          {t(label)}
         </button>
       ))}
       <button
@@ -218,7 +219,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           setState({ modal: { kind: 'labels', ids: [] } });
         }}
       >
-        Manage labels
+        {t('Manage labels')}
       </button>
       <div className="menu-sep" />
       <button
@@ -227,7 +228,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           fitRects(getState().boardId, [...allRects().values()]);
         }}
       >
-        Zoom to fit <kbd>⇧ 1</kbd>
+        {t('Zoom to fit')} <kbd>⇧ 1</kbd>
       </button>
       <button
         onClick={() => {
@@ -235,7 +236,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           setState({ presenting: true, selection: [], editingId: null, panel: null });
         }}
       >
-        Presentation mode
+        {t('Presentation mode')}
       </button>
       <button
         onClick={() => {
@@ -243,11 +244,11 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           setTheme(getState().theme === 'dark' ? 'light' : 'dark');
         }}
       >
-        Toggle dark mode
+        {t('Toggle dark mode')}
       </button>
       {getState().authEnabled && (
         <button className="danger" onClick={() => void api.logout()}>
-          Sign out
+          {t('Sign out')}
         </button>
       )}
       <button
@@ -256,7 +257,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           setState({ panel: 'shortcuts' });
         }}
       >
-        Keyboard shortcuts <kbd>?</kbd>
+        {t('Keyboard shortcuts')} <kbd>?</kbd>
       </button>
       <div className="menu-sep" />
       <div className="menu-note">{Object.keys(getState().elements).length} items stored locally</div>

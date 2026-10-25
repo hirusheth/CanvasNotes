@@ -6,6 +6,7 @@ import { addAiIdeas, insertSearchImage, type ImageResult } from '../moreActions'
 import { formatSize } from '../elements/ElementBody';
 import { timeAgo } from './Panels';
 import { hour12, numLocale } from '../locale';
+import { t } from '../i18n';
 
 const close = () => setState({ modal: null });
 
@@ -28,8 +29,8 @@ function Dialog({ title, children, wide }: { title: string; children: React.Reac
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && close()}>
       <div className={`dialog ${wide ? 'wide-dialog' : ''}`} role="dialog" aria-label={title}>
         <div className="side-head">
-          <h2>{title}</h2>
-          <button className="icon-btn" onClick={close} title="Close">
+          <h2>{t(title)}</h2>
+          <button className="icon-btn" onClick={close} title={t('Close')}>
             ✕
           </button>
         </div>
@@ -83,7 +84,7 @@ export function CropModal({ id }: { id: string }) {
   };
 
   return (
-    <Dialog title="Crop image" wide>
+    <Dialog title={t('Crop image')} wide>
       <div className="crop-stage-wrap">
         <div ref={stage} className="crop-stage" style={{ aspectRatio: `1 / ${el.content.ratio ?? 0.66}` }} onPointerMove={onMove} onPointerUp={() => (drag.current = null)}>
           <img src={el.content.src} alt="" draggable={false} />
@@ -99,9 +100,9 @@ export function CropModal({ id }: { id: string }) {
         </div>
       </div>
       <div className="trash-actions dialog-actions">
-        <button onClick={() => (patchElement(id, { content: { crop: null } }), close())}>Reset</button>
+        <button onClick={() => (patchElement(id, { content: { crop: null } }), close())}>{t('Reset')}</button>
         <button className="primary" onClick={() => (patchElement(id, { content: { crop: box } }), close())}>
-          Crop
+          {t('Crop')}
         </button>
       </div>
     </Dialog>
@@ -136,11 +137,11 @@ export function FileInfoModal({ id }: { id: string }) {
     ['Link', location.origin + src],
   ];
   return (
-    <Dialog title="File info">
+    <Dialog title={t('File info')}>
       <dl className="shortcut-list file-info">
         {rows.map(([k, v]) => (
           <div key={k}>
-            <dt>{k}</dt>
+            <dt>{t(k)}</dt>
             <dd>{v}</dd>
           </div>
         ))}
@@ -171,18 +172,18 @@ export function ImageSearchModal({ at }: { at?: { x: number; y: number; columnId
     }
   };
   return (
-    <Dialog title="Search images" wide>
+    <Dialog title={t('Search images')} wide>
       <div className="image-search-bar">
         <input
           className="palette-input"
           autoFocus
-          placeholder="Search images... (free images from Wikimedia Commons)"
+          placeholder={t('Search images... (free images from Wikimedia Commons)')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void search()}
         />
         <button className="primary" onClick={() => void search()} disabled={busy}>
-          {busy ? 'Searching…' : 'Search'}
+          {busy ? t('Searching…') : t('Search')}
         </button>
       </div>
       {error && <p className="side-sub">{error}</p>}
@@ -231,21 +232,21 @@ export function AiIdeasModal({ at }: { at?: { x: number; y: number } }) {
     }
   };
   return (
-    <Dialog title="AI Ideas">
-      <p className="side-sub">Describe what you're working on. Claude suggests ideas and adds them to this board as a column of notes, using the notes already here as context.</p>
+    <Dialog title={t('AI Ideas')}>
+      <p className="side-sub">{t('Describe what you\'re working on. Claude suggests ideas and adds them to this board as a column of notes, using the notes already here as context.')}</p>
       <div className="export-section">
         <textarea
           className="ai-prompt"
           autoFocus
           rows={4}
-          placeholder="e.g. Names for a small coffee shop by the beach"
+          placeholder={t('e.g. Names for a small coffee shop by the beach')}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && void go()}
         />
         {error && <p className="error-text">{error}</p>}
         <button className="primary" onClick={() => void go()} disabled={busy || !prompt.trim()}>
-          {busy ? 'Thinking…' : 'Get ideas'}
+          {busy ? t('Thinking…') : t('Get ideas')}
         </button>
       </div>
     </Dialog>
@@ -260,7 +261,7 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const title = mode === 'set' ? 'Password protect board' : mode === 'unlock' ? 'Unlock board' : 'Remove password';
+  const title = mode === 'set' ? 'Password protect board' : mode === 'unlock' ? t('Unlock board') : t('Remove password');
   const submit = async () => {
     if (mode === 'set' && password !== confirm) return setError("The passwords don't match");
     setBusy(true);
@@ -270,7 +271,7 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
       await api.postJson(url, { id, password });
       close();
       await load();
-      toast(mode === 'set' ? 'Board is now password protected' : mode === 'unlock' ? 'Board unlocked' : 'Password removed');
+      toast(mode === 'set' ? 'Board is now password protected' : mode === 'unlock' ? t('Board unlocked') : t('Password removed'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -282,16 +283,16 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
       <div className="export-section">
         <p className="side-sub">
           {mode === 'set'
-            ? `“${board?.content.title || 'This board'}” and everything inside it will stay hidden until the password is entered. It locks again when the browser closes.`
+            ? `“${board?.content.title || t('This board')}” and everything inside it will stay hidden until the password is entered. It locks again when the browser closes.`
             : mode === 'unlock'
-              ? 'Enter password to view this board'
-              : 'Enter the current password to remove protection.'}
+              ? t('Enter password to view this board')
+              : t('Enter the current password to remove protection.')}
         </p>
-        <input type="password" autoFocus placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mode !== 'set' && void submit()} />
-        {mode === 'set' && <input type="password" placeholder="Confirm password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />}
+        <input type="password" autoFocus placeholder={t('Password')} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mode !== 'set' && void submit()} />
+        {mode === 'set' && <input type="password" placeholder={t('Confirm password')} value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />}
         {error && <p className="error-text">{error}</p>}
         <button className="primary" onClick={() => void submit()} disabled={busy || !password}>
-          {mode === 'set' ? 'Protect board' : mode === 'unlock' ? 'Unlock board' : 'Remove password'}
+          {mode === 'set' ? 'Protect board' : mode === 'unlock' ? t('Unlock board') : t('Remove password')}
         </button>
       </div>
     </Dialog>

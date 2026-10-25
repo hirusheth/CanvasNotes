@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { commit, getState, patchElement, setState, useElement } from '../store';
 import type { Stroke } from '../types';
+import { t } from '../i18n';
 
 // Strokes are stored in a 1000-unit-wide coordinate space so they scale with the card.
 export const SKETCH_W = 1000;
@@ -40,7 +41,7 @@ export function SketchView({ strokes, ratio, background }: { strokes: Stroke[]; 
       {strokes.length ? (
         <StrokesSvg strokes={strokes} ratio={ratio} className="sketch-svg" />
       ) : (
-        !background && <div className="sketch-empty">Double-click to start drawing</div>
+        !background && <div className="sketch-empty">{t('Double-click to start drawing')}</div>
       )}
     </div>
   );
@@ -269,19 +270,19 @@ export function DrawingModal({ id }: { id: string }) {
 
   return (
     <div className="overlay draw-overlay">
-      <div className="draw-shell" role="dialog" aria-label="Drawing">
+      <div className="draw-shell" role="dialog" aria-label={t('Drawing')}>
         <div className="draw-tools">
-          <button className={tool === 'pen' ? 'active' : ''} onClick={() => setTool('pen')} title="Pen (P)">
-            ✎ Pen
+          <button className={tool === 'pen' ? 'active' : ''} onClick={() => setTool('pen')} title={t('Pen (P)')}>
+            {t('✎ Pen')}
           </button>
-          <button className={tool === 'eraser' ? 'active' : ''} onClick={() => setTool('eraser')} title="Eraser (E)">
-            ⌫ Eraser
+          <button className={tool === 'eraser' ? 'active' : ''} onClick={() => setTool('eraser')} title={t('Eraser (E)')}>
+            {t('⌫ Eraser')}
           </button>
-          <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')} title="Selection tool (V): drag to select, drag strokes to move, Delete to remove">
-            ⬚ Select
+          <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')} title={t('Selection tool (V): drag to select, drag strokes to move, Delete to remove')}>
+            {t('⬚ Select')}
           </button>
-          <button className={tool === 'eyedropper' ? 'active' : ''} onClick={() => setTool('eyedropper')} title="Colour eyedropper (I)">
-            💧 Pick
+          <button className={tool === 'eyedropper' ? 'active' : ''} onClick={() => setTool('eyedropper')} title={t('Colour eyedropper (I)')}>
+            {t('💧 Pick')}
           </button>
           {selected.size > 0 && (
             <button
@@ -294,7 +295,7 @@ export function DrawingModal({ id }: { id: string }) {
             </button>
           )}
           <span className="fb-sep" />
-          <button className={showPalette ? 'active' : ''} onClick={() => setShowPalette((v) => !v)} title="Toggle colour palette (C)">
+          <button className={showPalette ? 'active' : ''} onClick={() => setShowPalette((v) => !v)} title={t('Toggle colour palette (C)')}>
             🎨
           </button>
           {showPalette && PEN_COLORS.map((c) => (
@@ -313,7 +314,7 @@ export function DrawingModal({ id }: { id: string }) {
               }}
             />
           ))}
-          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} title="Custom colour" />
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} title={t('Custom colour')} />
           <span className="fb-sep" />
           {WEIGHTS.map((w) => (
             <button key={w} className={`pen-weight ${weight === w ? 'active' : ''}`} onClick={() => setWeight(w)} title={`Line weight ${w}`}>
@@ -321,16 +322,16 @@ export function DrawingModal({ id }: { id: string }) {
             </button>
           ))}
           <span className="fb-sep" />
-          <button onClick={undo} disabled={!undoStack.length} title="Undo (Ctrl Z)">
+          <button onClick={undo} disabled={!undoStack.length} title={t('Undo (Ctrl Z)')}>
             ↶
           </button>
-          <button onClick={redo} disabled={!redoStack.length} title="Redo (Ctrl Shift Z)">
+          <button onClick={redo} disabled={!redoStack.length} title={t('Redo (Ctrl Shift Z)')}>
             ↷
           </button>
           <div className="draw-spacer" />
-          <button onClick={close}>Discard</button>
-          <button className="primary" onClick={save} title="Save (Esc or Ctrl S)">
-            Save
+          <button onClick={close}>{t('Discard')}</button>
+          <button className="primary" onClick={save} title={t('Save (Esc or Ctrl S)')}>
+            {t('Save')}
           </button>
         </div>
         <div className="draw-stage">

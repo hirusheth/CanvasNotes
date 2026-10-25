@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onLocaleChange } from './locale';
+import { onLangChange } from './i18n';
 import {
   boardPath,
   commit,
@@ -48,6 +49,7 @@ import { openDrawing } from './elements/Sketch';
 import { bufferPendingKey } from './elements/RichText';
 import { allRects, fitRects, getViewport, setViewport, zoomAt } from './viewport';
 import type { El } from './types';
+import { t } from './i18n';
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -265,6 +267,9 @@ export function App() {
   // Re-render cards when number/date settings change.
   const [localeVersion, setLocaleVersion] = useState(0);
   useEffect(() => onLocaleChange(() => setLocaleVersion((v) => v + 1)), []);
+  // Changing the interface language re-renders everything with the new strings.
+  const [langVersion, setLangVersion] = useState(0);
+  useEffect(() => onLangChange(() => setLangVersion((v) => v + 1)), []);
   const readOnly = useStore((s) => s.readOnly);
   const boardId = useStore((s) => s.boardId);
   const boardTitle = useStore((s) => {
@@ -307,20 +312,20 @@ export function App() {
   if (loadError) {
     return (
       <div className="splash">
-        <h1>Couldn't reach the Canvas Notes server</h1>
+        <h1>{t('Couldn\'t reach the Canvas Notes server')}</h1>
         <p>{loadError}</p>
-        <button onClick={() => void load()}>Try again</button>
+        <button onClick={() => void load()}>{t('Try again')}</button>
       </div>
     );
   }
 
   return (
-    <div className={`app ${presenting ? 'presenting' : ''} ${readOnly ? 'read-only' : ''}`}>
+    <div key={langVersion} className={`app ${presenting ? 'presenting' : ''} ${readOnly ? 'read-only' : ''}`}>
       {!presenting && <TopBar />}
-      {readOnly && <div className="readonly-banner">Read-only board · made with Canvas Notes</div>}
+      {readOnly && <div className="readonly-banner">{t('Read-only board · made with Canvas Notes')}</div>}
       <div className="main">
         {!presenting && !readOnly && <Toolbar />}
-        {loaded ? <Canvas key={`${boardId}:${localeVersion}`} /> : <div className="splash">Loading…</div>}
+        {loaded ? <Canvas key={`${boardId}:${localeVersion}`} /> : <div className="splash">{t('Loading…')}</div>}
         {panel === 'trash' && <TrashPanel />}
         {panel === 'inbox' && <InboxPanel />}
         {panel === 'quick' && <InboxPanel scope="quick" />}

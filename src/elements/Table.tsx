@@ -5,6 +5,7 @@ import type { CellStyle, CellType, ElementOf, TableContent } from '../types';
 import { colName, evaluateGrid, FORMULA_MESSAGES, type Evaluated } from '../formula';
 import { parseDelimited } from '../moreActions';
 import { defaultCurrency, hour12, numLocale } from '../locale';
+import { t } from '../i18n';
 
 const CELL_TYPES: { value: CellType; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -149,7 +150,7 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
     copiedValues = vals;
     void navigator.clipboard?.writeText(raw.map((row) => row.join('\t')).join('\n')).catch(() => {});
     if (cut) clearRange(rg);
-    toast(`${cut ? 'Cut' : 'Copied'} ${(rg.r2 - rg.r1 + 1) * (rg.c2 - rg.c1 + 1)} cells`);
+    toast(`${cut ? t('Cut') : t('Copied')} ${(rg.r2 - rg.r1 + 1) * (rg.c2 - rg.c1 + 1)} cells`);
   };
 
   // Paste a block of cells at the active cell, growing the table if needed.
@@ -285,7 +286,7 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
         <input
           className="table-title-input"
           defaultValue={title}
-          placeholder="New Table"
+          placeholder={t('New Table')}
           data-nodrag
           onChange={(e) => update({ title: e.target.value }, `table-title:${el.id}`)}
           onKeyDown={(e) => e.key === 'Escape' && startEditing(null)}
@@ -302,7 +303,7 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
                   <th
                     key={c}
                     className="col-label"
-                    title="Select column"
+                    title={t('Select column')}
                     onClick={() => {
                       setAnchor({ r: 0, c });
                       setActive({ r: cells.length - 1, c });
@@ -373,10 +374,10 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
       </div>
       {editing && (
         <div className="table-actions" data-nodrag>
-          <button onClick={() => addRow(cells.length)}>+ Row</button>
-          <button onClick={() => addCol(cols)}>+ Column</button>
+          <button onClick={() => addRow(cells.length)}>{t('+ Row')}</button>
+          <button onClick={() => addCol(cols)}>{t('+ Column')}</button>
           <label>
-            <input type="checkbox" checked={header} onChange={(e) => update({ header: e.target.checked })} /> Header row
+            <input type="checkbox" checked={header} onChange={(e) => update({ header: e.target.checked })} /> {t('Header row')}
           </label>
           {active && (
             <span className="table-ref">
@@ -477,41 +478,41 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
       }}
     >
       <div className="menu-row">
-        <button onClick={run(actions.cut)}>Cut</button>
-        <button onClick={run(actions.copy)}>Copy</button>
-        <button onClick={run(actions.paste)}>Paste</button>
+        <button onClick={run(actions.cut)}>{t('Cut')}</button>
+        <button onClick={run(actions.copy)}>{t('Copy')}</button>
+        <button onClick={run(actions.paste)}>{t('Paste')}</button>
       </div>
-      <button onClick={run(actions.pasteValues)}>Paste Values</button>
+      <button onClick={run(actions.pasteValues)}>{t('Paste Values')}</button>
       <div className="menu-sep" />
-      <button onClick={run(actions.addRowAbove)}>{multi ? 'Add Rows Above' : 'Add Row Above'}</button>
-      <button onClick={run(actions.addRowBelow)}>{multi ? 'Add Rows Below' : 'Add Row Below'}</button>
-      <button onClick={run(actions.addColLeft)}>{multi ? 'Add Columns Left' : 'Add Column Left'}</button>
-      <button onClick={run(actions.addColRight)}>{multi ? 'Add Columns Right' : 'Add Column Right'}</button>
+      <button onClick={run(actions.addRowAbove)}>{multi ? t('Add Rows Above') : t('Add Row Above')}</button>
+      <button onClick={run(actions.addRowBelow)}>{multi ? t('Add Rows Below') : t('Add Row Below')}</button>
+      <button onClick={run(actions.addColLeft)}>{multi ? t('Add Columns Left') : t('Add Column Left')}</button>
+      <button onClick={run(actions.addColRight)}>{multi ? t('Add Columns Right') : t('Add Column Right')}</button>
       <div className="menu-row">
-        <button title="Move row up" onClick={run(actions.moveRowUp)}>↑</button>
-        <button title="Move row down" onClick={run(actions.moveRowDown)}>↓</button>
-        <button title="Move column left" onClick={run(actions.moveColLeft)}>←</button>
-        <button title="Move column right" onClick={run(actions.moveColRight)}>→</button>
+        <button title={t('Move row up')} onClick={run(actions.moveRowUp)}>↑</button>
+        <button title={t('Move row down')} onClick={run(actions.moveRowDown)}>↓</button>
+        <button title={t('Move column left')} onClick={run(actions.moveColLeft)}>←</button>
+        <button title={t('Move column right')} onClick={run(actions.moveColRight)}>→</button>
       </div>
       <div className="menu-sep" />
-      <div className="menu-label">Cell type (whole column)</div>
+      <div className="menu-label">{t('Cell type (whole column)')}</div>
       <div className="menu-chips">
-        {CELL_TYPES.map((t) => (
-          <button key={t.value} className={type === t.value ? 'active' : ''} onClick={run(() => actions.style({ type: t.value }, true))}>
-            {t.label}
+        {CELL_TYPES.map((ct) => (
+          <button key={ct.value} className={type === ct.value ? 'active' : ''} onClick={run(() => actions.style({ type: ct.value }, true))}>
+            {t(ct.label)}
           </button>
         ))}
       </div>
       {(type === 'number' || type === 'currency' || type === 'percentage' || type === 'auto') && (
         <>
-          <div className="menu-label">Decimals</div>
+          <div className="menu-label">{t('Decimals')}</div>
           <div className="menu-chips">
             {[null, 0, 1, 2, 3].map((d) => (
               <button key={String(d)} className={(style?.decimals ?? null) === d ? 'active' : ''} onClick={run(() => actions.style({ decimals: d }, true))}>
                 {d === null ? 'Auto' : d}
               </button>
             ))}
-            <button className={style?.thousands === false ? '' : 'active'} title="Thousands separator" onClick={run(() => actions.style({ thousands: style?.thousands === false }, true))}>
+            <button className={style?.thousands === false ? '' : 'active'} title={t('Thousands separator')} onClick={run(() => actions.style({ thousands: style?.thousands === false }, true))}>
               1,000
             </button>
           </div>
@@ -519,7 +520,7 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
       )}
       {type === 'currency' && (
         <>
-          <div className="menu-label">Currency</div>
+          <div className="menu-label">{t('Currency')}</div>
           <div className="menu-chips">
             {CURRENCIES.map((cur) => (
               <button key={cur} className={(style?.currency ?? defaultCurrency()) === cur ? 'active' : ''} onClick={run(() => actions.style({ currency: cur }, true))}>
@@ -531,7 +532,7 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
       )}
       {type === 'date' && (
         <>
-          <div className="menu-label">Date format</div>
+          <div className="menu-label">{t('Date format')}</div>
           <div className="menu-chips">
             {DATE_FORMATS.map((f) => (
               <button key={f.value} className={(style?.dateFormat ?? 'medium') === f.value ? 'active' : ''} onClick={run(() => actions.style({ dateFormat: f.value }, true))}>
@@ -541,7 +542,7 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
           </div>
         </>
       )}
-      <div className="menu-label">Alignment</div>
+      <div className="menu-label">{t('Alignment')}</div>
       <div className="menu-row">
         {(['left', 'center', 'right'] as const).map((a) => (
           <button key={a} className={style?.align === a ? 'active' : ''} onClick={run(() => actions.style({ align: a }))}>
@@ -552,19 +553,19 @@ function TableMenu({ menu, style, multi, onClose, actions }: { menu: Menu; style
           <b>B</b>
         </button>
       </div>
-      <div className="menu-label">Colour</div>
+      <div className="menu-label">{t('Colour')}</div>
       <div className="menu-colors">
         {CELL_COLORS.map((c) => (
           <button key={c ?? 'none'} className={`swatch-dot ${c ? '' : 'no-color'}`} style={c ? { background: c } : undefined} onClick={run(() => actions.style({ bg: c }))} />
         ))}
       </div>
       <div className="menu-sep" />
-      <button onClick={run(actions.clear)}>{multi ? 'Clear Cells' : 'Clear Cell'}</button>
+      <button onClick={run(actions.clear)}>{multi ? t('Clear Cells') : t('Clear Cell')}</button>
       <button className="danger" onClick={run(actions.removeRow)}>
-        {multi ? 'Delete Rows' : 'Delete Row'}
+        {multi ? t('Delete Rows') : t('Delete Row')}
       </button>
       <button className="danger" onClick={run(actions.removeCol)}>
-        {multi ? 'Delete Columns' : 'Delete Column'}
+        {multi ? t('Delete Columns') : t('Delete Column')}
       </button>
     </div>,
     document.body,
