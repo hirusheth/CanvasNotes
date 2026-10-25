@@ -124,6 +124,8 @@ export function exportBoardWord(boardId: string, subBoards: boolean) {
   downloadText(`${safeFileName(title)}.doc`, htmlToWordDoc(title, `<h1>${escapeHtml(title)}</h1>${boardHtml(boardId, subBoards)}`), 'application/msword');
 }
 
+const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 // Renders the whole board (not just the visible part) to a PNG, or opens it for printing as PDF.
 export async function exportBoardPng(boardId: string, pixelRatio = 2, print = false) {
   const world = document.querySelector<HTMLElement>('.world');
@@ -135,14 +137,17 @@ export async function exportBoardPng(boardId: string, pixelRatio = 2, print = fa
   const pad = 40;
   const bg = getComputedStyle(canvas).backgroundColor;
   try {
-    const url = await toPng(world, {
+    const render = toPng(world, {
       pixelRatio,
       backgroundColor: bg,
       width: box.w + pad * 2,
       height: box.h + pad * 2,
       style: { transform: `translate(${pad - box.x}px, ${pad - box.y}px)`, left: '0', top: '0' },
+      // Images from other sites (favicons, previews) usually can't be read back: leave a blank instead.
+      imagePlaceholder: BLANK_PIXEL,
       filter: (node) => !(node instanceof HTMLElement && node.classList.contains('resize-handle')),
     });
+    const url = await Promise.race([render, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))]);
     const title = safeFileName(boardTitle(boardId));
     if (print) {
       const w = window.open('', '_blank');
