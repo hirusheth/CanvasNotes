@@ -7,7 +7,9 @@ import crypto from 'node:crypto';
 import { openStore } from './store.mjs';
 import { unfurl } from './unfurl.mjs';
 import { buildZip } from './zip.mjs';
-import { createAuth, LOGIN_PAGE } from './auth.mjs';
+import { createAuth, installSecret, LOGIN_PAGE } from './auth.mjs';
+import { createBoards } from './boards.mjs';
+import { fetchImportable, generateIdeas, searchImages } from './integrations.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEV = process.argv.includes('--dev');
@@ -84,8 +86,24 @@ async function readJson(req) {
 }
 
 const auth = createAuth({ password: PASSWORD, dataDir: DATA_DIR });
+const boards = createBoards({ store, secret: installSecret(DATA_DIR) });
 // Files the login page itself needs before signing in.
 const PUBLIC_PATHS = new Set(['/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/favicon.svg']);
+
+// What a signed-out visitor may load: the sign-in page's assets, and published boards.
+function isPublicRequest(pathname) {
+  if (PUBLIC_PATHS.has(pathname) || pathname.startsWith('/assets/') || pathname.startsWith('/api/public/') || pathname.startsWith('/p/')) return true;
+  return pathname.startsWith('/files/') && boards.publishedFiles().has(pathname);
+}
+
+function saveUpload(body, name, mime) {
+  const ext = (path.extname(name).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
+  const hash = crypto.createHash('sha256').update(body).digest('hex').slice(0, 32);
+  const fileName = hash + ext;
+  const target = path.join(FILES_DIR, fileName);
+  if (!fs.existsSync(target)) fs.writeFileSync(target, body);
+  return { url: `/files/${fileName}`, name, size: body.length, mime: mime || MIME[ext] || 'application/octet-stream' };
+}
 
 function serveFile(res, filePath, { immutable = false } = {}) {
   fs.stat(filePath, (err, stat) => {
@@ -110,7 +128,7 @@ async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
   switch (route) {
     case 'GET /api/state':
-      return send(res, 200, { elements: store.all(), auth: !!auth });
+      return send(res, 200, { elements: boards.visible(req), auth: !!auth });
     case 'POST /api/ops': {
       const { ops } = await readJson(req);
       if (!Array.isArray(ops)) return send(res, 400, { error: 'ops must be an array' });
@@ -120,17 +138,26 @@ async function handleApi(req, res, url) {
     case 'POST /api/upload': {
       const name = (url.searchParams.get('name') || 'file').slice(0, 200);
       const body = await readBody(req, MAX_UPLOAD);
-      const ext = (path.extname(name).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
-      const hash = crypto.createHash('sha256').update(body).digest('hex').slice(0, 32);
-      const fileName = hash + ext;
-      const target = path.join(FILES_DIR, fileName);
-      if (!fs.existsSync(target)) fs.writeFileSync(target, body);
-      return send(res, 200, {
-        url: `/files/${fileName}`,
-        name,
-        size: body.length,
-        mime: req.headers['content-type'] || MIME[ext] || 'application/octet-stream',
-      });
+      return send(res, 200, saveUpload(body, name, req.headers['content-type']));
+    }
+    case 'GET /api/image-search':
+      return send(res, 200, await searchImages(url.searchParams.get('q')));
+    case 'POST /api/import-url': {
+      const { url: target } = await readJson(req);
+      const { buf, name, mime } = await fetchImportable(target);
+      return send(res, 200, saveUpload(buf, name, mime));
+    }
+    case 'POST /api/ai-ideas': {
+      const result = await generateIdeas(await readJson(req));
+      return send(res, result.status, result.body);
+    }
+    case 'POST /api/board-lock':
+    case 'POST /api/board-unlock':
+    case 'POST /api/board-unlock-remove': {
+      const body = await readJson(req);
+      const fn = url.pathname.endsWith('remove') ? 'removeLock' : url.pathname.endsWith('unlock') ? 'unlock' : 'lock';
+      const result = boards[fn](req, body);
+      return send(res, result.status, result.body, result.headers);
     }
     case 'GET /api/unfurl': {
       const target = url.searchParams.get('url') || '';
@@ -151,15 +178,19 @@ async function handleApi(req, res, url) {
     }
     default: {
       const zipMatch = req.method === 'GET' && url.pathname.match(/^\/api\/board-files\/([\w-]+)$/);
-      if (zipMatch) return sendBoardZip(res, zipMatch[1]);
+      if (zipMatch) return sendBoardZip(res, zipMatch[1], boards.visible(req));
+      const pubMatch = req.method === 'GET' && url.pathname.match(/^\/api\/public\/([\w-]+)$/);
+      if (pubMatch) {
+        const pub = boards.published(pubMatch[1]);
+        return pub ? send(res, 200, pub) : send(res, 404, { error: 'This board is no longer published' });
+      }
       return send(res, 404, { error: 'Unknown API route' });
     }
   }
 }
 
 // Every uploaded image/file on a board and its sub-boards, as one ZIP.
-function sendBoardZip(res, boardId) {
-  const all = store.all();
+function sendBoardZip(res, boardId, all) {
   const byParent = new Map();
   for (const el of all) {
     if (el.section === 'trash') continue;
@@ -217,7 +248,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, result.status, result.body, result.headers);
       }
       if (req.method === 'POST' && url.pathname === '/api/logout') return send(res, 200, { ok: true }, auth.logoutHeaders());
-      if (!auth.isAuthed(req) && !PUBLIC_PATHS.has(url.pathname)) {
+      if (!auth.isAuthed(req) && !isPublicRequest(url.pathname)) {
         if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/files/')) return send(res, 401, { error: 'Sign in required' });
         return send(res, 200, LOGIN_PAGE, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       }

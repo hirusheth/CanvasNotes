@@ -10,12 +10,16 @@ const MAX_AGE = 60 * 60 * 24 * 365; // one year
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
 
-export function createAuth({ password, dataDir }) {
-  if (!password) return null;
-  // A per-install secret, so tokens can't be forged from the password alone.
+// A per-install secret, so signed cookies can't be forged from the password alone.
+export function installSecret(dataDir) {
   const secretFile = path.join(dataDir, '.session-secret');
   if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
-  const secret = fs.readFileSync(secretFile, 'utf8').trim();
+  return fs.readFileSync(secretFile, 'utf8').trim();
+}
+
+export function createAuth({ password, dataDir }) {
+  if (!password) return null;
+  const secret = installSecret(dataDir);
   // Changing the password changes the key, which signs everyone out.
   const key = crypto.createHmac('sha256', secret).update(password).digest();
   const attempts = new Map();

@@ -12,6 +12,11 @@ export function openStore(file) {
       data TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS board_locks (
+      board_id TEXT PRIMARY KEY,
+      salt TEXT NOT NULL,
+      hash TEXT NOT NULL
+    );
   `);
 
   const selectAll = db.prepare('SELECT data FROM elements');
@@ -21,6 +26,11 @@ export function openStore(file) {
   );
   const remove = db.prepare('DELETE FROM elements WHERE id = ?');
   const clear = db.prepare('DELETE FROM elements');
+  const selectLocks = db.prepare('SELECT board_id, salt, hash FROM board_locks');
+  const upsertLock = db.prepare(
+    'INSERT INTO board_locks (board_id, salt, hash) VALUES (?, ?, ?) ON CONFLICT(board_id) DO UPDATE SET salt = excluded.salt, hash = excluded.hash',
+  );
+  const deleteLock = db.prepare('DELETE FROM board_locks WHERE board_id = ?');
 
   function transaction(fn) {
     db.exec('BEGIN');
@@ -41,6 +51,16 @@ export function openStore(file) {
   }
 
   return {
+    // Password-protected boards: board id → { salt, hash }. Hashes never leave the server.
+    locks() {
+      return new Map(selectLocks.all().map((r) => [r.board_id, { salt: r.salt, hash: r.hash }]));
+    },
+    setLock(id, salt, hash) {
+      upsertLock.run(id, salt, hash);
+    },
+    removeLock(id) {
+      deleteLock.run(id);
+    },
     all() {
       return selectAll.all().map((row) => JSON.parse(row.data));
     },
