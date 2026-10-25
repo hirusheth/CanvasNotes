@@ -1051,6 +1051,35 @@ async (page) => {
       throw new Error(`[${step}] ${String(e.message || e).split('\n')[0]}`);
     }
   });
+  await check('H4', 'Interface language: Español, Français, Português', async () => {
+    const seen = {};
+    for (const [code, note, menuItem, settings] of [
+      ['es', 'Nota', 'Nueva nota', 'Ajustes'],
+      ['fr', 'Note', 'Nouvelle note', 'Réglages'],
+      ['pt', 'Nota', 'Nova nota', 'Configurações'],
+    ]) {
+      if (!(await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).count())) await page.locator('.toolbar .tool').filter({ hasText: /^(More|Más|Plus|Mais)$/ }).click();
+      await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).locator('select').selectOption(code);
+      await wait(400);
+      const tools = (await page.locator('.toolbar .tool span').allInnerTexts()).join('|');
+      const heading = await page.locator('.side-panel .side-head h2').first().innerText();
+      await page.keyboard.press('Escape');
+      const [ex, ey] = await emptyPoint();
+      await rclickAt(ex, ey);
+      const menuText = await page.locator('.menu').innerText();
+      await page.keyboard.press('Escape');
+      seen[code] = `${tools.split('|')[0]} / ${heading}`;
+      assert(tools.split('|')[0] === note, `${code}: toolbar starts with ${tools.split('|')[0]}`);
+      assert(heading === settings, `${code}: settings heading ${heading}`);
+      assert(menuText.includes(menuItem), `${code}: board menu lacks ${menuItem}`);
+      assert(await page.evaluate(() => document.documentElement.lang) === code, `${code}: html lang`);
+    }
+    await page.locator('.toolbar .tool').filter({ hasText: /^(More|Más|Plus|Mais)$/ }).click();
+    await page.locator('.field', { hasText: /Language|Idioma|Langue/ }).locator('select').selectOption('en');
+    await wait(300);
+    assert((await page.locator('.toolbar .tool span').first().innerText()) === 'Note', 'back to English');
+    return Object.entries(seen).map(([k, v]) => `${k}: ${v}`).join('; ');
+  });
 
   // ------------------------------------------------------------ I. layouts
   for (const [id, w, h, expect] of [
