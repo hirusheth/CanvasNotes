@@ -34,6 +34,9 @@ For development with hot reload: `npm run dev` (same port; Vite runs inside the 
 | `CANVASNOTES_PASSWORD` | unset | Turns on the sign-in page. **Required once it's reachable from other devices** |
 | `ANTHROPIC_API_KEY` | unset | Optional. Turns on **AI Ideas** (brainstorm cards with Claude) |
 
+Number and date formats, the default currency and 12/24-hour time are set per
+device in **Settings → Localization**.
+
 ## Host it (for phone, iPad and laptop)
 
 1. **Run it on a server** (a VPS, a home server or a Raspberry Pi):
@@ -108,6 +111,14 @@ Right-click anything for its menu. `?` lists every shortcut.
 - **Private boards**: right-click a board → *Password Protect…*. Its contents stay on the server until you unlock it.
 - **Share read-only**: right-click a board → *Publish Read-only Link*. Anyone with the link can view it without signing in. *Unpublish* turns it off.
 - **Synced copies**: right-click a card → *Create Synced Copy*. Editing one updates the others.
+
+## Checking it
+
+`npm run test:parity` drives the real app in headless Chrome and checks every
+feature in `docs/feature-parity.md` (74 checks, about 2½ minutes). Start a
+server with an empty `DATA_DIR` first, for example
+`DATA_DIR=/tmp/cn-test npm start`. It uses the system Chrome; set
+`CHROME_PATH` if yours is elsewhere, and `CANVASNOTES_URL` for another address.
 
 ## How it's built
 

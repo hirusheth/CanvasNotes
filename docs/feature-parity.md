@@ -15,6 +15,12 @@ client, captured with REA:
 3. Each entry was then built and tested in a browser (desktop, simulated
    iPhone and iPad with real touch events), or marked as not built, with the
    reason.
+4. The rows are re-checked automatically by `tests/parity.e2e.js`
+   (`npm run test:parity` against a server with an empty `DATA_DIR`). It drives
+   the real UI in headless Chrome and verifies what the server stored: 74
+   checks, last run 74/74 on 2026-10-25. Touch gestures (double-tap, hold-drag,
+   hold-menu, pinch) were verified separately with Chrome DevTools touch
+   emulation.
 
 ✅ built and tested · ◐ partly built · ✗ not built · — doesn't apply to a
 single-user, self-hosted app
@@ -80,8 +86,8 @@ single-user, self-hosted app
 | Styles: normal, large heading, heading, small heading, small text, quote, callout, code block | ✅ |
 | Clear formatting | ✅ |
 | Markdown shortcuts `#` `##` `*` `1.` `[]` `>` `!` ` ``` ` `---` | ✅ |
-| Font, font size | ◐ Size comes from the styles above. No font picker |
-| Paragraph text indent | ✗ |
+| Font, font size | ✅ Font and size picker (Aa) in the note toolbar |
+| Paragraph text indent | ✅ Indent / un-indent buttons and Tab work on paragraphs and headings, not just lists |
 | Mentions, assign to user | — |
 
 ## Tables (`popup.table`, `canvas.contextMenuItems.table`)
@@ -128,7 +134,7 @@ single-user, self-hosted app
 
 | Milanote | Status | Notes |
 |---|---|---|
-| Breadcrumbs, go to parent, back/forward | ✅ | |
+| Breadcrumbs, go to parent, back/forward, drag cards onto a breadcrumb to move them up | ✅ | |
 | Unsorted (`canvas.inbox`) | ✅ | Per-board panel, quick add, drag out to the board, `U` to send cards there |
 | Quick notes (from your phone) | ✅ | A Quick notes panel shared by every board, reachable from any device (no separate native app) |
 | Templates: choose, keep example content, your custom templates, convert / revert | ✅ | No public template gallery |
@@ -152,8 +158,9 @@ single-user, self-hosted app
 
 Every section is covered: the basics, navigation, zoom, appearance (dark mode,
 larger/smaller interface), text formatting, Markdown, to-do lists and drawing.
-Not built: the colour eyedropper, the drawing selection tool, and the
-colour-palette toggle.
+The drawing tools are all there too: the colour eyedropper (I, picks a stroke's
+colour or an image pixel), the selection tool (V, box-select strokes, drag to
+move, Delete), and the colour-palette toggle (C).
 
 ## Settings (`settings.*`)
 
@@ -161,7 +168,8 @@ colour-palette toggle.
 |---|---|
 | Appearance (light / dark / system), interface size | ✅ |
 | Toolbar options (choose tools) | ✅ |
-| Localization | ✗ (English only) |
+| Localization: numbers & dates format, currency, 12/24-hour time | ✅ Settings → Localization; tables, due dates and timestamps follow it |
+| Localization: interface language | ◐ English only. Translating every UI string is not done |
 | Notifications, privacy, account, billing | — |
 
 ## Devices
