@@ -17,8 +17,8 @@ client, captured with REA:
    reason.
 4. The rows are re-checked automatically by `tests/parity.e2e.js`
    (`npm run test:parity` against a server with an empty `DATA_DIR`). It drives
-   the real UI in headless Chrome and verifies what the server stored: 74
-   checks, last run 74/74 on 2026-10-25. Touch gestures (double-tap, hold-drag,
+   the real UI in headless Chrome and verifies what the server stored: 75
+   checks, last run 75/75 on 2026-10-25. Touch gestures (double-tap, hold-drag,
    hold-menu, pinch) were verified separately with Chrome DevTools touch
    emulation.
 
@@ -169,7 +169,7 @@ move, Delete), and the colour-palette toggle (C).
 | Appearance (light / dark / system), interface size | ✅ |
 | Toolbar options (choose tools) | ✅ |
 | Localization: numbers & dates format, currency, 12/24-hour time | ✅ Settings → Localization; tables, due dates and timestamps follow it |
-| Localization: interface language | ◐ English only. Translating every UI string is not done |
+| Localization: interface language | ✅ English, Español, Français, Português, the languages Milanote offers everyone. Its German, Chinese, Russian, Polish, Japanese, Dutch, Italian and Korean options sit behind experiment flags in its bundle and are not added here |
 | Notifications, privacy, account, billing | — |
 
 ## Devices
