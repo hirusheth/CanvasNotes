@@ -32,6 +32,7 @@ For development with hot reload: `npm run dev` (same port; Vite runs inside the 
 | `HOST` | `127.0.0.1` | `0.0.0.0` to accept connections from other devices |
 | `DATA_DIR` | `./data` | Where the database and uploads live |
 | `CANVASNOTES_PASSWORD` | unset | Turns on the sign-in page. **Required once it's reachable from other devices** |
+| `ANTHROPIC_API_KEY` | unset | Optional. Turns on **AI Ideas** (brainstorm cards with Claude) |
 
 ## Host it (for phone, iPad and laptop)
 
@@ -103,6 +104,10 @@ Right-click anything for its menu. `?` lists every shortcut.
 - **Export**: the download icon → PNG, PDF, Markdown, Word, or a ZIP of all
   files.
 - **Presentation mode**: Ctrl Shift P, then the arrow keys.
+- **Quick notes**: the inbox icon in the top bar. One holding area shared by every board, handy from your phone.
+- **Private boards**: right-click a board → *Password Protect…*. Its contents stay on the server until you unlock it.
+- **Share read-only**: right-click a board → *Publish Read-only Link*. Anyone with the link can view it without signing in. *Unpublish* turns it off.
+- **Synced copies**: right-click a card → *Create Synced Copy*. Editing one updates the others.
 
 ## How it's built
 

@@ -36,23 +36,23 @@ single-user, self-hosted app
 | Column | ✅ | Drag in and out, ordering, collapse, colour |
 | Comment (`commentThread`) | ✅ | Thread card with replies, edit, delete (single user, no mentions) |
 | Table | ✅ | Formulas, cell types, alignment, colour, row/column operations |
-| Spreadsheet | ◐ | The table card covers it. No spreadsheet file import |
+| Spreadsheet | ✅ | Table card; dropping a CSV/TSV file imports it as a table |
 | Image | ✅ | Upload, paste, drop, caption, replace, download original |
 | File / Upload | ✅ | Any file. PDF preview, download, copy link |
 | Sketch | ✅ | Pen, eraser, 8 colours plus custom, 4 weights, undo/redo, save/discard |
 | Annotation (draw on image) | ✅ | "Draw On" any image |
 | Document | ✅ | Full-screen editor, word count, export to Markdown, text, Word, PDF |
 | Colour swatch | ✅ | Picker, name, hex |
-| Synced copy (`clone`) | ✗ | Copies that edit together. Not built yet |
-| Folder | ✗ | Appears only as a toolbar string. Its behaviour couldn't be confirmed from the bundle |
-| Image/File placeholder | ✗ | Not built |
+| Synced copy (`clone`) | ✅ | Editing one copy updates the others; badge shows the count; stop syncing |
+| Folder | ✅ | A collapsible folder-style column (its exact Milanote behaviour couldn't be confirmed from the bundle) |
+| Image/File placeholder | ✅ | Empty slot you drop or pick a file into |
 
 ## Selected-card tools (`toolbar.tools.selected`)
 
 | Milanote | Status | Notes |
 |---|---|---|
 | Colour (card colour, background) | ✅ | 8 colours, default, custom colour picker |
-| Colour mode: top strip vs background (`popup.color.modeSwitcher`) | ◐ | Columns use a top strip, cards a background. Not switchable |
+| Colour mode: top strip vs background (`popup.color.modeSwitcher`) | ✅ | Switchable per card |
 | Caption / description | ✅ | Boards, shortcuts, links, files, swatches, sketches, tables, documents |
 | Labels | ✅ | Create, colour, rename, delete with confirmation, usage count, filter in search |
 | Connect | ✅ | "Connect with Lines" plus the line tool |
@@ -62,11 +62,11 @@ single-user, self-hosted app
 | Icon | ✅ | |
 | Rename, Title | ✅ | |
 | Preview, Media, Link info | ✅ | |
-| File info | ◐ | Name, size and type shown on the card. No separate panel |
-| Edit image (crop) | ✗ | Not built |
-| Transparent | ✗ | Not built |
-| Autoplay, Loop, Start, End (video) | ✗ | Embeds use the provider's own controls |
-| Reactions | — | Multi-user feature |
+| File info | ✅ | Panel with name, type, size, dimensions, dates |
+| Edit image (crop) | ✅ | Crop editor with handles; crop to fit the dot grid |
+| Transparent | ✅ | Card colour option |
+| Autoplay, Loop, Start, End (video) | ✅ | For YouTube/Vimeo embeds and uploaded media |
+| Reactions | ✅ | Emoji reactions on cards (single user) |
 
 ## Text editing (`toolbar.tools.editing`, `toolbar.textStyles`, `popup.textStyle`)
 
@@ -92,8 +92,8 @@ single-user, self-hosted app
 | Cell types: auto, text, number, currency, percentage, checkbox, date & time | ✅ | |
 | Formulas with circular-reference, divide-by-zero and parse errors | ✅ | SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, SQRT, POWER, IF, AND, OR, NOT, CONCAT, LEN, UPPER, LOWER, TODAY, operators, ranges |
 | Alignment, cell colour, bold, header row, clear cell | ✅ | |
-| Number format options (decimals, chosen currency, date format) | ◐ | Sensible defaults (USD, locale dates). Not configurable |
-| Multi-cell selection, paste values | ✗ | |
+| Number format options (decimals, chosen currency, date format) | ✅ | Decimals, currency, date format, thousands separator |
+| Multi-cell selection, paste values | ✅ | Shift-select ranges, copy/cut/clear blocks, paste from spreadsheets, paste values |
 
 ## Board menu (`canvas.contextMenuItems.canvas`)
 
@@ -102,7 +102,7 @@ single-user, self-hosted app
 | New note / to-do / column / board / table / comment / link / line | ✅ (plus heading, document, sketch, colour, video, audio, map) |
 | Paste, undo, redo, select all | ✅ |
 | Change board background, custom colour, revert to default, show dot grid | ✅ |
-| New folder, new image/file placeholder | ✗ |
+| New folder, new image/file placeholder | ✅ |
 | New public template | — (Milanote staff tool) |
 
 ## Card menu (`canvas.contextMenuItems.element`)
@@ -120,9 +120,9 @@ single-user, self-hosted app
 | Rename, choose custom colour, add image (via image tool) | ✅ |
 | Convert to template, revert template to board | ✅ |
 | Created / modified time | ✅ |
-| Convert to sketch card | ✗ |
-| Create synced copy | ✗ |
-| Crop image to fit dot grid, download SVG | ✗ |
+| Convert to sketch card | ✅ |
+| Create synced copy | ✅ |
+| Crop image to fit dot grid, download SVG | ✅ |
 
 ## Boards, navigation and organising
 
@@ -130,12 +130,12 @@ single-user, self-hosted app
 |---|---|---|
 | Breadcrumbs, go to parent, back/forward | ✅ | |
 | Unsorted (`canvas.inbox`) | ✅ | Per-board panel, quick add, drag out to the board, `U` to send cards there |
-| Quick notes (from your phone) | ◐ | The Unsorted quick-add does this from any device. There's no separate mobile app |
+| Quick notes (from your phone) | ✅ | A Quick notes panel shared by every board, reachable from any device (no separate native app) |
 | Templates: choose, keep example content, your custom templates, convert / revert | ✅ | No public template gallery |
 | Trash: restore, delete, empty trash with confirmation | ✅ | |
 | Search (`appHeader.tools.boardSearch`): matches, sort by relevance / last modified / last viewed, labels, recently viewed | ✅ | "Shared with" filter doesn't apply |
 | Presentation mode | ✅ | Full screen, steps through cards, opens boards |
-| Board password protection | ◐ | The whole app is password-protected instead (`CANVASNOTES_PASSWORD`) |
+| Board password protection | ✅ | Per-board passwords (hashed on the server; contents withheld until unlocked), on top of the app sign-in |
 
 ## Export (`appHeader.tools.export`)
 
@@ -145,7 +145,7 @@ single-user, self-hosted app
 | As PDF | ✅ (through the browser's print dialog) |
 | Linear document: Markdown, plain text, Word, include sub-boards | ✅ |
 | Download all images and files as a ZIP | ✅ (includes sub-boards, one folder per board) |
-| Export a single element | ◐ (documents only) |
+| Export a single element | ✅ (notes, documents, tables, sketches) |
 | Whole-account backup | ✅ (JSON export/import, not in Milanote) |
 
 ## Shortcuts (`modal.shortcuts`)
@@ -176,7 +176,11 @@ colour-palette toggle.
 
 ## Out of scope (multi-user or Milanote's services)
 
-Sharing and publishing boards, team and billing, notifications, mentions,
-assignments, reactions, real-time collaboration, sign-up and onboarding, the
-desktop and mobile apps, the admin tools, and image search (needs an
-Unsplash/Instagram API key).
+Sharing with other people, team and billing, notifications, mentions,
+assignments, real-time collaboration, sign-up and onboarding, the native
+desktop and mobile apps, and the admin tools.
+
+Added beyond the first pass, though Milanote has them: **read-only public
+links** for a board (contents of password-locked boards stay hidden), **image
+search** (Wikimedia Commons, no key needed), and **AI Ideas** (brainstorm cards
+with Claude; needs `ANTHROPIC_API_KEY` on the server).
