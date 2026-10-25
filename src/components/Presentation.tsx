@@ -73,7 +73,7 @@ export function Presentation() {
   const total = order().length;
   return (
     <div className="presentation-hud">
-      <span>{step < 0 ? 'Overview' : `${step + 1} / ${total}`}</span>
+      <span>{step < 0 ? t('Overview') : `${step + 1} / ${total}`}</span>
       <span className="hud-hint">{t('← → to move · Enter opens a board · Esc to exit')}</span>
       <button onClick={() => setState({ presenting: false })}>{t('Exit')}</button>
     </div>

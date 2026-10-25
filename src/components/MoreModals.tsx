@@ -166,7 +166,7 @@ export function ImageSearchModal({ at }: { at?: { x: number; y: number; columnId
       setResults(res.results ?? []);
       if (res.error) setError(res.error);
     } catch {
-      setError('Image search is unavailable right now');
+      setError(t('Image search is unavailable right now'));
     } finally {
       setBusy(false);
     }
@@ -261,9 +261,9 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const title = mode === 'set' ? 'Password protect board' : mode === 'unlock' ? t('Unlock board') : t('Remove password');
+  const title = mode === 'set' ? t('Password protect board') : mode === 'unlock' ? t('Unlock board') : t('Remove password');
   const submit = async () => {
-    if (mode === 'set' && password !== confirm) return setError("The passwords don't match");
+    if (mode === 'set' && password !== confirm) return setError(t("The passwords don't match"));
     setBusy(true);
     setError(null);
     try {
@@ -283,7 +283,7 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
       <div className="export-section">
         <p className="side-sub">
           {mode === 'set'
-            ? `“${board?.content.title || t('This board')}” and everything inside it will stay hidden until the password is entered. It locks again when the browser closes.`
+            ? t('“{title}” and everything inside it will stay hidden until the password is entered. It locks again when the browser closes.', { title: board?.content.title || t('This board') })
             : mode === 'unlock'
               ? t('Enter password to view this board')
               : t('Enter the current password to remove protection.')}
@@ -292,7 +292,7 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
         {mode === 'set' && <input type="password" placeholder={t('Confirm password')} value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />}
         {error && <p className="error-text">{error}</p>}
         <button className="primary" onClick={() => void submit()} disabled={busy || !password}>
-          {mode === 'set' ? 'Protect board' : mode === 'unlock' ? t('Unlock board') : t('Remove password')}
+          {mode === 'set' ? t('Protect board') : mode === 'unlock' ? t('Unlock board') : t('Remove password')}
         </button>
       </div>
     </Dialog>

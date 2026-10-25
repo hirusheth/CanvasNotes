@@ -215,7 +215,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           {CARD_COLORS.map((c) => (
             <button
               key={c.name}
-              title={c.name}
+              title={t(c.name)}
               className={`swatch-dot ${c.value ? `color-${c.value}` : 'no-color'} ${single && (single.color ?? null) === c.value ? 'active' : ''}`}
               onClick={run(() => patchElements(Object.fromEntries(ids.map((id) => [id, { color: c.value }]))))}
             />
@@ -291,7 +291,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       )}
       {single && ['note', 'todo', 'column', 'board', 'link', 'swatch', 'line', 'heading', 'table', 'comment'].includes(single.type) && (
         <Item onClick={() => startEditing(single.id)} kbd="Enter">
-          {single.type === 'line' ? 'Edit Label' : single.type === 'board' ? t('Rename') : t('Edit')}
+          {single.type === 'line' ? t('Edit Label') : single.type === 'board' ? t('Rename') : t('Edit')}
         </Item>
       )}
       {single?.type === 'sketch' && (
@@ -390,7 +390,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
             {(['end', 'both', 'none'] as const).map((arrow) => (
               <button
                 key={arrow}
-                title={arrow === 'end' ? 'Arrow at end' : arrow === 'both' ? t('Arrows at both ends') : t('No arrows')}
+                title={arrow === 'end' ? t('Arrow at end') : arrow === 'both' ? t('Arrows at both ends') : t('No arrows')}
                 className={lines.every((l) => l.content.arrow === arrow) ? 'active' : ''}
                 onClick={run(() => patchElements(Object.fromEntries(lines.map((l) => [l.id, { content: { arrow } }]))))}
               >

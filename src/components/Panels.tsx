@@ -157,7 +157,7 @@ export function SearchPalette() {
             {query.trim() || labelFilter ? t(results.length === 1 ? '1 match' : '{n} matches', { n: results.length }) : t('Recently viewed boards')}
           </span>
           <label>
-            Sort by:{' '}
+            {t('Sort by:')}{' '}
             <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
               <option value="relevance">{t('Relevance')}</option>
               <option value="modified">{t('Last modified')}</option>
@@ -198,7 +198,7 @@ export function SearchPalette() {
                     </span>
                   ) : null}
                 </span>
-                <span className="result-where">{r.el.type === 'board' && !query.trim() ? 'Board' : boardTitle(r.el.parentId)}</span>
+                <span className="result-where">{r.el.type === 'board' && !query.trim() ? t('Board') : boardTitle(r.el.parentId)}</span>
               </button>
             </li>
           ))}
@@ -393,7 +393,7 @@ export function InboxPanel({ scope = 'board' }: { scope?: 'board' | 'quick' }) {
         <p className="side-sub">{t('Jot things down from any device — your phone included — and sort them onto a board later. Drag a note onto any board.')}</p>
       ) : (
         <p className="side-sub">
-          A place to put things while you decide where they should go. Drag cards onto the board; press <kbd>U</kbd> {t('to send selected cards here.')}
+          {t('A place to put things while you decide where they should go. Drag cards onto the board; press')} <kbd>U</kbd> {t('to send selected cards here.')}
         </p>
       )}
       <div className="inbox-list scrollable">

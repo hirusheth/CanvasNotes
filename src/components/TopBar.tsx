@@ -55,7 +55,7 @@ export function TopBar() {
                 data-crumb={last ? undefined : b.id}
                 className={`crumb ${last ? 'current' : ''}`}
                 onClick={() => (last ? b.id !== ROOT_ID && setRenaming(true) : navigate(b.id))}
-                title={last && b.id !== ROOT_ID ? 'Rename board' : `Go to ${b.title}`}
+                title={last && b.id !== ROOT_ID ? t('Rename board') : t('Go to {title}', { title: b.title })}
               >
                 {b.title}
               </button>
@@ -64,7 +64,7 @@ export function TopBar() {
         })}
       </nav>
       <div className="topbar-right">
-        <span className={`save-status ${saveStatus}`} title={saveStatus === 'error' ? 'Retrying — the server could not be reached' : undefined}>
+        <span className={`save-status ${saveStatus}`} title={saveStatus === 'error' ? t('Retrying — the server could not be reached') : undefined}>
           {saveStatus === 'saved' ? t('Saved') : saveStatus === 'saving' ? t('Saving…') : t('Offline, retrying')}
         </span>
         <div className="btn-group">
@@ -117,7 +117,7 @@ export function TopBar() {
         <button
           className="icon-btn hide-sm"
           onClick={() => setTheme(theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system')}
-          title={`Theme: ${theme}`}
+          title={t('Theme: {mode}', { mode: t(theme === 'system' ? 'Match system' : theme === 'dark' ? 'Dark' : 'Light') })}
         >
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
             {theme === 'dark' ? (
@@ -166,9 +166,9 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
       try {
         const data = JSON.parse(await file.text());
         const elements: El[] = Array.isArray(data) ? data : data.elements;
-        if (!Array.isArray(elements)) throw new Error('No elements in file');
+        if (!Array.isArray(elements)) throw new Error(t('No elements in file'));
         const replace = window.confirm(
-          `Import ${elements.length} items.\n\nOK = replace everything with this backup\nCancel = merge into current boards`,
+          t('Import {n} items.\n\nOK = replace everything with this backup\nCancel = merge into current boards', { n: elements.length }),
         );
         await api.importElements(elements, replace ? 'replace' : 'merge');
         await load();

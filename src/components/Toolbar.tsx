@@ -150,11 +150,11 @@ export function Toolbar() {
         </button>
         <button className={`tool ${panel === 'inbox' ? 'active' : ''}`} title={t('Unsorted (U moves selected cards here)')} onClick={() => togglePanel('inbox')}>
           <I d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5" />
-          <span>Unsorted{inboxCount ? ` ${inboxCount}` : ''}</span>
+          <span>{t('Unsorted')}{inboxCount ? ` ${inboxCount}` : ''}</span>
         </button>
         <button className={`tool ${panel === 'trash' ? 'active' : ''}`} title={t('Trash')} onClick={() => togglePanel('trash')}>
           <I d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
-          <span>Trash{trashCount ? ` ${trashCount}` : ''}</span>
+          <span>{t('Trash')}{trashCount ? ` ${trashCount}` : ''}</span>
         </button>
       </nav>
       {ghost && (

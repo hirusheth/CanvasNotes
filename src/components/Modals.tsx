@@ -73,7 +73,7 @@ function DocumentModal({ id }: { id: string }) {
       <div className="doc-sheet" role="dialog" aria-label={t('Document')}>
         <div className="doc-sheet-bar">
           <span className="doc-sheet-meta">
-            {words} word{words === 1 ? '' : 's'}
+            {t(words === 1 ? '1 word' : '{n} words', { n: words })}
           </span>
           <div className="menu-anchor">
             <button className="ghost-btn" onClick={() => setExportOpen((o) => !o)}>

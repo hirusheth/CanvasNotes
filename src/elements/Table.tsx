@@ -329,7 +329,7 @@ export function TableBody({ el, editing }: { el: ElementOf<'table'>; editing: bo
                     <td
                       key={c}
                       style={style}
-                      title={v.error ? FORMULA_MESSAGES[v.error] : undefined}
+                      title={v.error ? t(FORMULA_MESSAGES[v.error]) : undefined}
                       className={`${v.error ? 'cell-error' : ''} ${inRange(range, r, c) ? 'in-range' : ''}`}
                       onContextMenu={(e) => onContext(e, r, c)}
                       onMouseDown={(e) => {

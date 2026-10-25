@@ -63,7 +63,7 @@ export function AliasBody({ el }: { el: ElementOf<'alias'> }) {
           ↪
         </span>
       </div>
-      <div className="board-title">{missing ? 'Board not found' : board!.content.title || t('Untitled board')}</div>
+      <div className="board-title">{missing ? t('Board not found') : board!.content.title || t('Untitled board')}</div>
       <div className="board-meta">{t('Shortcut')}</div>
     </div>
   );
@@ -130,7 +130,7 @@ export function CommentBody({ el, editing }: { el: ElementOf<'comment'>; editing
                 ref={inputRef}
                 value={draft}
                 rows={2}
-                placeholder={editId ? 'Update your comment…' : comments.length ? t('Reply…') : t('Write a comment…')}
+                placeholder={editId ? t('Update your comment…') : comments.length ? t('Reply…') : t('Write a comment…')}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -172,9 +172,9 @@ export function DocumentBody({ el }: { el: ElementOf<'document'> }) {
       </div>
       <div className="doc-text">
         <div className={`doc-title ${el.content.title ? '' : 'placeholder'}`}>{el.content.title || t('New Document')}</div>
-        <div className="doc-excerpt">{text ? text.slice(0, 160) : 'Double-click to start typing'}</div>
+        <div className="doc-excerpt">{text ? text.slice(0, 160) : t('Double-click to start typing')}</div>
         <div className="doc-meta">
-          {words} word{words === 1 ? '' : 's'}
+          {t(words === 1 ? '1 word' : '{n} words', { n: words })}
         </div>
       </div>
     </div>
@@ -205,7 +205,7 @@ export function CardExtras({ el }: { el: El }) {
   return (
     <>
       {synced > 1 && (
-        <span className="sync-badge" title={`There are ${synced} synced copies of this card — editing one updates them all`}>
+        <span className="sync-badge" title={t('There are {n} synced copies of this card — editing one updates them all', { n: synced })}>
           ⇄ {synced}
         </span>
       )}

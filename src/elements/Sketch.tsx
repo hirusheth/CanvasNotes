@@ -317,7 +317,7 @@ export function DrawingModal({ id }: { id: string }) {
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} title={t('Custom colour')} />
           <span className="fb-sep" />
           {WEIGHTS.map((w) => (
-            <button key={w} className={`pen-weight ${weight === w ? 'active' : ''}`} onClick={() => setWeight(w)} title={`Line weight ${w}`}>
+            <button key={w} className={`pen-weight ${weight === w ? 'active' : ''}`} onClick={() => setWeight(w)} title={t('Line weight {n}', { n: w })}>
               <span style={{ width: Math.min(18, w), height: Math.min(18, w) }} />
             </button>
           ))}

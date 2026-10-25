@@ -239,7 +239,7 @@ function FormatBar({ editor }: { editor: Editor }) {
                 className={(editor.getAttributes('textStyle').fontFamily ?? null) === f.value ? 'active' : ''}
                 onMouseDown={(e) => (e.preventDefault(), f.value ? chain().setFontFamily(f.value).run() : chain().unsetFontFamily().run())}
               >
-                {f.label}
+                {t(f.label)}
               </button>
             ))}
             <div className="menu-label">{t('Size')}</div>

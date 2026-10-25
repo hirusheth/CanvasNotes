@@ -455,7 +455,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
       )}
       {attribution && (
         <a data-nodrag className="attribution" href={attribution.url} target="_blank" rel="noopener noreferrer">
-          From Wikimedia Commons · {attribution.label}
+          {t('From Wikimedia Commons')} · {attribution.label}
         </a>
       )}
     </figure>
@@ -472,12 +472,12 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
   if (editing || !url) {
     return (
       <div className="card link link-edit">
-        <label className="link-label">{kind ? kind[0].toUpperCase() + kind.slice(1) : 'Link'}</label>
+        <label className="link-label">{t(kind ? kind[0].toUpperCase() + kind.slice(1) : 'Link')}</label>
         <input
           ref={ref}
           className="link-input"
           defaultValue={url}
-          placeholder={LINK_PLACEHOLDERS[kind ?? 'default']}
+          placeholder={t(LINK_PLACEHOLDERS[kind ?? 'default'])}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
           }}
@@ -522,7 +522,7 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
         </div>
       )}
       <div className="link-text">
-        <div className="link-title">{loading ? 'Loading preview…' : title || url}</div>
+        <div className="link-title">{loading ? t('Loading preview…') : title || url}</div>
         {description && !loading && <div className="link-desc">{description}</div>}
         <div className="link-site">
           <img className="favicon" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostOf(url))}&sz=32`} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />

@@ -2,13 +2,21 @@
 // Keys are the English strings themselves, so untranslated text falls back to English.
 import { TRANSLATIONS } from './translations';
 
-export type Lang = 'en' | 'es' | 'fr' | 'pt';
+export type Lang = 'en' | 'es' | 'fr' | 'pt' | 'de' | 'it' | 'nl' | 'pl' | 'ru' | 'ja' | 'zh' | 'ko';
 
 export const LANGUAGES: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
   { id: 'es', label: 'Español' },
   { id: 'fr', label: 'Français' },
   { id: 'pt', label: 'Português' },
+  { id: 'de', label: 'Deutsch' },
+  { id: 'it', label: 'Italiano' },
+  { id: 'nl', label: 'Nederlands' },
+  { id: 'pl', label: 'Polski' },
+  { id: 'ru', label: 'Русский' },
+  { id: 'ja', label: '日本語' },
+  { id: 'zh', label: '中文' },
+  { id: 'ko', label: '한국어' },
 ];
 
 const KEY = 'cn:lang';

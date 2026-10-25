@@ -1,4 +1,5 @@
 import type { El } from './types';
+import { t } from './i18n';
 
 export type Op = { op: 'put'; el: El } | { op: 'del'; id: string };
 
@@ -6,7 +7,7 @@ async function json<T>(res: Response): Promise<T> {
   // The session expired or was signed out elsewhere: reload to show the sign-in page.
   if (res.status === 401) {
     location.reload();
-    throw new Error('Sign in required');
+    throw new Error(t('Sign in required'));
   }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;

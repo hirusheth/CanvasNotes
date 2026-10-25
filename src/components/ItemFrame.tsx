@@ -3,6 +3,7 @@ import { useElement, useStore } from '../store';
 import { ElementBody } from '../elements/ElementBody';
 import { CardExtras } from '../elements/MoreBodies';
 import { useCanvas } from './canvasContext';
+import { t } from '../i18n';
 
 const RESIZABLE = new Set(['note', 'heading', 'todo', 'image', 'link', 'column', 'file', 'swatch', 'sketch', 'table', 'document', 'comment']);
 
@@ -58,7 +59,7 @@ export const ItemFrame = memo(function ItemFrame({ id, inColumn = false }: { id:
     >
       <ElementBody el={el} editing={editing} selected={selected} />
       <CardExtras el={el} />
-      {selected && !inColumn && !editing && !el.locked && RESIZABLE.has(el.type) && <div className="resize-handle" data-resize title="Drag to resize" />}
+      {selected && !inColumn && !editing && !el.locked && RESIZABLE.has(el.type) && <div className="resize-handle" data-resize title={t('Drag to resize')} />}
     </div>
   );
 });

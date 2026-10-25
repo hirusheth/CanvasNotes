@@ -9,6 +9,7 @@ import { downloadText, htmlToMarkdown, safeFileName } from './markdown';
 import { allRects } from './viewport';
 import { SKETCH_W } from './elements/Sketch';
 import { evaluateGrid } from './formula';
+import { t } from './i18n';
 
 // ---------------------------------------------------------------- synced copies
 
@@ -208,7 +209,7 @@ async function readXlsx(file: File): Promise<string[][]> {
     eocd = i;
     break;
   }
-  if (eocd < 0) throw new Error('Not a valid .xlsx file');
+  if (eocd < 0) throw new Error(t('Not a valid .xlsx file'));
   const count = view.getUint16(eocd + 10, true);
   let ptr = view.getUint32(eocd + 16, true);
   const files = new Map<string, { method: number; size: number; offset: number }>();
@@ -240,7 +241,7 @@ async function readXlsx(file: File): Promise<string[][]> {
   }
   const sheetName = [...files.keys()].filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
   const sheet = sheetName ? await read(sheetName) : null;
-  if (!sheet) throw new Error('The workbook has no sheets');
+  if (!sheet) throw new Error(t('The workbook has no sheets'));
   const doc = new DOMParser().parseFromString(sheet, 'application/xml');
   const grid: string[][] = [];
   doc.querySelectorAll('sheetData row').forEach((rowEl) => {

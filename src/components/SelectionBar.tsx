@@ -27,16 +27,16 @@ export function SelectionBar({ onMenu }: { onMenu(menu: MenuState): void }) {
   const openLabel = !single
     ? null
     : ['board', 'alias', 'document'].includes(single.type)
-      ? 'Open'
+      ? t('Open')
       : single.type === 'sketch'
-        ? 'Draw'
+        ? t('Draw')
         : single.type === 'image' || single.type === 'file'
           ? t('View')
           : t('Edit');
 
   return (
     <div className="selection-bar" onPointerDown={(e) => e.stopPropagation()}>
-      <span className="sel-count">{selection.length} selected</span>
+      <span className="sel-count">{t('{n} selected', { n: selection.length })}</span>
       {openLabel && <button onClick={open}>{openLabel}</button>}
       <button onClick={() => duplicate()}>{t('Duplicate')}</button>
       <button
