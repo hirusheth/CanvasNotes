@@ -26,6 +26,14 @@ npm start            # http://127.0.0.1:5180
 
 For development with hot reload: `npm run dev` (same port; Vite runs inside the server).
 
+`npm start` and `npm run dev` read a `.env` file in the project folder if there is
+one (it's git-ignored). To open it from your phone or iPad on the same Wi-Fi:
+
+```bash
+printf 'HOST=0.0.0.0\nCANVASNOTES_PASSWORD=choose-a-password\n' > .env
+npm start            # prints the http://<ip>:5180 addresses to open
+```
+
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `5180` | Port to listen on |

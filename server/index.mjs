@@ -1,6 +1,7 @@
 // Canvas Notes server: a JSON API over a local SQLite file, uploaded files on
 // disk, link previews, and the built client (or Vite middleware in --dev).
 import http from 'node:http';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -276,6 +277,14 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Canvas Notes ${DEV ? '(dev) ' : ''}running at http://${HOST}:${PORT}`);
+  if (['0.0.0.0', '::'].includes(HOST)) {
+    for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+      if (/^(docker|br-|veth)/.test(name)) continue;
+      for (const a of addrs ?? []) {
+        if (a.family === 'IPv4' && !a.internal) console.log(`  on your network: http://${a.address}:${PORT}`);
+      }
+    }
+  }
   console.log(`Data directory: ${DATA_DIR}`);
   const local = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
   if (!local && !PASSWORD) {

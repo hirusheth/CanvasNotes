@@ -8,9 +8,9 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "node server/index.mjs --dev",
+    "dev": "node --env-file-if-exists=.env server/index.mjs --dev",
     "build": "tsc --noEmit && vite build",
-    "start": "node server/index.mjs",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
     "typecheck": "tsc --noEmit",
     "test:parity": "node tests/run-parity.mjs"
   },
