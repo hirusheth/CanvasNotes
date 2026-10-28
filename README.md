@@ -1,13 +1,14 @@
 # Canvas Notes
 
-A personal, self-hosted visual notes app in the style of Milanote. Put notes,
+A self-hosted visual notes app in the style of Milanote. Put notes,
 headings, to-do lists, tables, sketches, documents, images, files, links,
 videos, maps and colour swatches anywhere on an endless board. Group them in
 columns, connect them with arrows, label them, and put boards inside boards.
 It works on a laptop, an iPad and a phone.
 
-Your data stays on your server: notes are kept in a SQLite file and uploads in
-a folder, both under `data/`.
+Everyone who uses it signs up with an email and password and gets their own
+boards; nobody can see anyone else's. Data stays on your server: notes are kept
+in a SQLite file and uploads in a folder, both under `data/`.
 
 `docs/feature-parity.md` compares every Milanote feature (taken from its UI
 strings with REA) against what's built here. `docs/rea-findings.md` explains how
@@ -30,16 +31,24 @@ For development with hot reload: `npm run dev` (same port; Vite runs inside the 
 one (it's git-ignored). To open it from your phone or iPad on the same Wi-Fi:
 
 ```bash
-printf 'HOST=0.0.0.0\nCANVASNOTES_PASSWORD=choose-a-password\n' > .env
+printf 'HOST=0.0.0.0\nCANVASNOTES_SIGNUPS=closed\n' > .env
 npm start            # prints the http://<ip>:5180 addresses to open
 ```
+
+The first visit shows the sign-in page: choose **Create account**. With
+`CANVASNOTES_SIGNUPS=closed` that first account is still allowed (it's yours),
+and nobody else on the network can make one.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `5180` | Port to listen on |
 | `HOST` | `127.0.0.1` | `0.0.0.0` to accept connections from other devices |
 | `DATA_DIR` | `./data` | Where the database and uploads live |
-| `CANVASNOTES_PASSWORD` | unset | Turns on the sign-in page. **Required once it's reachable from other devices** |
+| `CANVASNOTES_SIGNUPS` | `open` | `closed` stops new accounts (the very first one is always allowed) |
+| `CANVASNOTES_INVITE_CODE` | unset | If set, new accounts need this code (except the first) |
+| `CANVASNOTES_QUOTA_MB` | `1024` | Upload space per account |
+| `CANVASNOTES_DATA_MB` | `200` | Space for cards (notes, boards…) per account |
+| `CANVASNOTES_TRUST_PROXY` | unset | `1` behind a reverse proxy (Caddy, nginx), so rate limits see the real client IP |
 | `ANTHROPIC_API_KEY` | unset | Optional. Turns on **AI Ideas** (brainstorm cards with Claude) |
 
 The interface language (English, Español, Français, Português, Deutsch,
@@ -52,13 +61,14 @@ formats, the default currency and 12/24-hour time are set per device in
 1. **Run it on a server** (a VPS, a home server or a Raspberry Pi):
 
    ```bash
-   echo 'CANVASNOTES_PASSWORD=choose-a-long-password' > .env
+   echo 'CANVASNOTES_SIGNUPS=open' > .env   # or closed / an invite code, see above
    mkdir -p data                 # must be writable by uid 1000 (the container's user)
    docker compose up -d          # data is kept in ./data
    ```
 
-   Without Docker: `HOST=0.0.0.0 CANVASNOTES_PASSWORD=… npm start`, kept running
-   with systemd or pm2.
+   The container only listens on `127.0.0.1:5180`, for the HTTPS proxy in step 2.
+   Without Docker: `CANVASNOTES_TRUST_PROXY=1 npm start` behind the same proxy,
+   kept running with systemd or pm2.
 
 2. **Put HTTPS in front of it.** The session cookie is marked `Secure` behind
    HTTPS. Never type the password over plain HTTP on the internet. With
@@ -78,10 +88,28 @@ formats, the default currency and 12/24-hour time are set per device in
    Screen*. It opens full screen like an app and stays signed in for a year.
    On Android, use Chrome → *Install app*.
 
-Signing in sets an HttpOnly cookie signed with a per-install secret
-(`data/.session-secret`). Changing the password signs every device out. After
-ten wrong attempts in 15 minutes, sign-in is blocked for a while. Use **⋯ → Sign
-out** on a shared device.
+### Accounts
+
+- Passwords are hashed with scrypt. Signing in sets an HttpOnly, SameSite cookie
+  that lasts a year; the server keeps only a hash of it, and signing out ends it
+  on the server too.
+- **⋯ → Account** changes your name or password (other devices are signed out)
+  or deletes the account with everything in it.
+- Ten wrong passwords in 15 minutes block that email, and that IP, for a while.
+- Each account's uploads are private: a file loads only for its owner, or for
+  anyone when it's on a published board. Uploaded HTML, SVG and other active
+  files download inside a sandbox instead of opening as the site.
+- Note content is cleaned before it's shown, and a Content-Security-Policy only
+  lets the app run its own scripts. Requests that change data must come from
+  the app's own pages. Link previews can't reach private network addresses.
+- Limits: 5 MB per card, `CANVASNOTES_DATA_MB` (200) of cards per account,
+  `CANVASNOTES_QUOTA_MB` (1024) of uploads per account.
+- There's no email service, so a forgotten password is reset on the server:
+  `node server/admin.mjs reset-password <email> <new password>`
+  (`node server/admin.mjs list` shows the accounts). Use the same `DATA_DIR`.
+- Upgrading from a version without accounts: the database is backed up to
+  `data/canvasnotes-before-accounts-<time>.db`, and the first account created
+  gets all the existing boards and files. `CANVASNOTES_PASSWORD` is no longer used.
 
 Back up by copying `data/`, or use **⋯ → Export backup** for one JSON file.
 **Import backup** can merge that file in or replace everything.
@@ -126,18 +154,37 @@ Right-click anything for its menu. `?` lists every shortcut.
 
 `npm run test:parity` drives the real app in headless Chrome and checks every
 feature in `docs/feature-parity.md` (103 checks, about 4 minutes), including touch
-gestures in a phone-sized touch context and the hosted sign-in on a second,
-password-protected server it starts on port 5191. Run it with Node 22.5 or newer,
-like the server. Start a
-server with an empty `DATA_DIR` first, for example
-`DATA_DIR=/tmp/cn-test npm start`. It uses the system Chrome; set
+gestures in a phone-sized touch context. It signs up a fresh account first. Start
+a server with an empty `DATA_DIR` first, for example `DATA_DIR=/tmp/cn-test npm start`.
+
+`npm run test:accounts` checks sign-up, sign-in, sessions, account settings and
+that accounts can't see or change each other's data (26 checks, about 20 seconds).
+
+`npm run test:security` tries the attacks one account or a stranger could make:
+script hidden in notes, uploaded pages, `javascript:` links, cross-site requests,
+framing, path traversal, injection, oversized requests, server-side requests to
+private addresses, session tricks, and checks the headers and `npm audit`
+(21 checks, about a minute).
+
+`npm run test:responsive` measures the sign-in, account and public-board screens
+at 16 phone, tablet and desktop sizes: nothing scrolls sideways or is cut off,
+dialogs can be scrolled to their last button, touch targets are at least 40px
+(7 checks, about a minute).
+
+These three start their own servers (ports 5192–5211), so nothing needs to be
+running. With `EVIDENCE_DIR=<folder>` they also keep screenshots and a JSON
+report there.
+
+Both need Node 22.13 or newer, like the server, and use the system Chrome; set
 `CHROME_PATH` if yours is elsewhere, and `CANVASNOTES_URL` for another address.
 
 ## How it's built
 
 - `server/` is a dependency-free Node server: a JSON API over `node:sqlite`,
   uploads, link previews (`/api/unfurl`), a ZIP of a board's files, and
-  password sign-in (`auth.mjs`). It also serves the built client.
+  accounts and sessions (`accounts.mjs`, sign-in page in `authPage.mjs`). Every
+  query is scoped to the signed-in account (`store.mjs`). It also serves the
+  built client.
 - `src/` is React and TypeScript, built with Vite. TipTap is the rich-text
   editor.
   - `store.ts` holds element state, undo/redo, and debounced autosave.
