@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { safeUrl, sanitizeHtml } from '../sanitize';
 import { columnChildren, getState, patchElement, startEditing, uid, useStore } from '../store';
 import type { El, ElementOf, MediaOptions, TodoItem } from '../types';
 import { pickFiles } from '../actions';
@@ -86,7 +87,7 @@ function NoteBody({ el, editing }: BodyProps<'note'>) {
   return (
     <div className="card note">
       {el.content.html ? (
-        <div className="rich-text" onClick={openLinkInNote} dangerouslySetInnerHTML={{ __html: el.content.html }} />
+        <div className="rich-text" onClick={openLinkInNote} dangerouslySetInnerHTML={{ __html: sanitizeHtml(el.content.html) }} />
       ) : (
         <div className="rich-text placeholder">{t('Empty note')}</div>
       )}
@@ -104,7 +105,7 @@ function openLinkInNote(e: React.MouseEvent) {
   const board = href.match(/^#\/b\/([\w-]+)/);
   if (board) navigate(board[1]);
   else if (href === '#/') navigate('root');
-  else if (href) window.open(href, '_blank', 'noopener');
+  else if (safeUrl(href)) window.open(href, '_blank', 'noopener');
 }
 
 // ---------------------------------------------------------------- board
@@ -454,7 +455,7 @@ function ImageBody({ el, editing }: BodyProps<'image'>) {
         el.content.caption && <figcaption>{el.content.caption}</figcaption>
       )}
       {attribution && (
-        <a data-nodrag className="attribution" href={attribution.url} target="_blank" rel="noopener noreferrer">
+        <a data-nodrag className="attribution" href={safeUrl(attribution.url) ?? undefined} target="_blank" rel="noopener noreferrer">
           {t('From Wikimedia Commons')} · {attribution.label}
         </a>
       )}
@@ -507,7 +508,7 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
         </div>
         <div className="link-site embed-bar">
           <span>{title && !loading ? title : site || hostOf(url)}</span>
-          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
+          <a data-nodrag className="link-open" href={safeUrl(url) ?? undefined} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
             ↗
           </a>
         </div>
@@ -527,7 +528,7 @@ function LinkBody({ el, editing, selected }: BodyProps<'link'>) {
         <div className="link-site">
           <img className="favicon" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostOf(url))}&sz=32`} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
           <span>{site || hostOf(url)}</span>
-          <a data-nodrag className="link-open" href={url} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
+          <a data-nodrag className="link-open" href={safeUrl(url) ?? undefined} target="_blank" rel="noopener noreferrer" title={t('Open link')}>
             ↗
           </a>
         </div>
@@ -613,7 +614,7 @@ function FileBody({ el }: BodyProps<'file'>) {
         <audio data-nodrag src={mediaSrc(src, el.content.media)} controls preload="metadata" className="file-audio" loop={el.content.media?.loop} autoPlay={el.content.media?.autoplay} />
       )}
       {mime === 'application/pdf' && (
-        <a data-nodrag className="file-preview-link" href={src} target="_blank" rel="noopener">
+        <a data-nodrag className="file-preview-link" href={safeUrl(src) ?? undefined} target="_blank" rel="noopener">
           {t('Preview PDF ↗')}
         </a>
       )}
@@ -627,7 +628,7 @@ function FileBody({ el }: BodyProps<'file'>) {
         </div>
         <div className="file-size">{formatSize(size)}</div>
       </div>
-        <a data-nodrag className="icon-btn small" href={src} download={name} title={t('Download')}>
+        <a data-nodrag className="icon-btn small" href={safeUrl(src) ?? undefined} download={name} title={t('Download')}>
           ⤓
         </a>
       </div>

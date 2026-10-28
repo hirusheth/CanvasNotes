@@ -15,6 +15,7 @@ import {
   dependents,
   uid,
 } from '../store';
+import * as api from '../api';
 import { LABELS_PARENT, QUICK_PARENT, ROOT_ID, SYSTEM_PARENT, TEMPLATES_PARENT, type El, type ElementOf } from '../types';
 import { STARTER_TEMPLATES, applyStarterTemplate } from '../moreActions';
 import { plainText, columnAt, boardUrl, copyText } from '../actions';
@@ -60,7 +61,7 @@ function boardTitle(id: string) {
 const VIEWED_KEY = 'cn:viewed';
 export function lastViewed(): Record<string, number> {
   try {
-    return JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(api.userKey(VIEWED_KEY)) || '{}');
   } catch {
     return {};
   }
@@ -69,7 +70,7 @@ export function markViewed(boardId: string) {
   try {
     const v = lastViewed();
     v[boardId] = Date.now();
-    localStorage.setItem(VIEWED_KEY, JSON.stringify(v));
+    localStorage.setItem(api.userKey(VIEWED_KEY), JSON.stringify(v));
   } catch {}
 }
 

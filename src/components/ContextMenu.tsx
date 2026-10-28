@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { safeUrl } from '../sanitize';
 import { getState, maxZ, navigate, patchElements, startEditing, trashElements, makeElement, addElements, setState, undo, redo, setTheme } from '../store';
 import { CARD_COLORS, CAPTION_TYPES, ROOT_ID, SYSTEM_PARENT, type El, type ElementType } from '../types';
 import {
@@ -332,7 +333,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
           {single.content.src && <Item onClick={() => cropToGrid(single.id)}>{t('Crop Image to Fit Dot Grid')}</Item>}
           {single.content.src && <Item onClick={() => convertToSketch(single.id)}>{t('Convert to Sketch Card')}</Item>}
           <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>{t('File Info')}</Item>
-          <a className="menu-link" href={single.content.src} download onClick={onClose}>
+          <a className="menu-link" href={safeUrl(single.content.src) ?? undefined} download onClick={onClose}>
             {t('Download Original Image')}
           </a>
           <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>{t('Copy Link to File')}</Item>
@@ -340,9 +341,9 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       )}
       {single?.type === 'file' && (
         <>
-          <Item onClick={() => window.open(single.content.src, '_blank', 'noopener')}>{t('Open File')}</Item>
+          <Item onClick={() => safeUrl(single.content.src) && window.open(single.content.src, '_blank', 'noopener')}>{t('Open File')}</Item>
           <Item onClick={() => setState({ modal: { kind: 'fileInfo', id: single.id } })}>{t('File Info')}</Item>
-          <a className="menu-link" href={single.content.src} download={single.content.name} onClick={onClose}>
+          <a className="menu-link" href={safeUrl(single.content.src) ?? undefined} download={single.content.name} onClick={onClose}>
             {t('Download')}
           </a>
           <Item onClick={() => copyText(location.origin + single.content.src, 'Link copied')}>{t('Copy Link to File')}</Item>
@@ -350,7 +351,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
       )}
       {single?.type === 'link' && single.content.url && (
         <>
-          <Item onClick={() => window.open(single.content.url, '_blank', 'noopener')}>{t('Open Link')}</Item>
+          <Item onClick={() => safeUrl(single.content.url) && window.open(single.content.url, '_blank', 'noopener')}>{t('Open Link')}</Item>
           <Item onClick={() => copyText(single.content.url, 'Link address copied')}>{t('Copy Link Address')}</Item>
           <Item onClick={() => void fetchLinkPreview(single.id, single.content.url)}>{t('Refresh Preview')}</Item>
           <Item onClick={() => replacePreview(single.id)}>{t('Replace Preview')}</Item>

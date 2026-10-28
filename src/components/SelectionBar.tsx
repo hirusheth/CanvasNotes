@@ -1,4 +1,5 @@
 import { getState, navigate, setState, startEditing, trashElements, useStore } from '../store';
+import { safeUrl } from '../sanitize';
 import { duplicate } from '../actions';
 import { openDrawing } from '../elements/Sketch';
 import { openDocument } from '../elements/MoreBodies';
@@ -21,7 +22,7 @@ export function SelectionBar({ onMenu }: { onMenu(menu: MenuState): void }) {
     else if (single.type === 'alias') navigate(single.content.boardId);
     else if (single.type === 'sketch') openDrawing(single.id);
     else if (single.type === 'document') openDocument(single.id);
-    else if (single.type === 'image' || single.type === 'file') window.open(single.content.src, '_blank', 'noopener');
+    else if (single.type === 'image' || single.type === 'file') safeUrl(single.content.src) && window.open(single.content.src, '_blank', 'noopener');
     else startEditing(single.id);
   };
   const openLabel = !single

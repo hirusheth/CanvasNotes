@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { safeUrl } from '../sanitize';
 import {
   addElements,
   columnOrderAt,
@@ -688,8 +689,8 @@ export function Canvas() {
       if (getState().elements[el.content.boardId]?.section === 'canvas') navigate(el.content.boardId);
     } else if (el.type === 'sketch') openDrawing(el.id);
     else if (el.type === 'document') openDocument(el.id);
-    else if (el.type === 'link' && getState().editingId !== el.id && el.content.url) window.open(el.content.url, '_blank', 'noopener');
-    else if (el.type === 'image' || el.type === 'file') window.open(el.content.src, '_blank', 'noopener');
+    else if (el.type === 'link' && getState().editingId !== el.id && el.content.url) safeUrl(el.content.url) && window.open(el.content.url, '_blank', 'noopener');
+    else if (el.type === 'image' || el.type === 'file') safeUrl(el.content.src) && window.open(el.content.src, '_blank', 'noopener');
     else startEditing(el.id);
   };
 

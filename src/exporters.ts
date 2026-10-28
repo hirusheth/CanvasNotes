@@ -152,8 +152,11 @@ export async function exportBoardPng(boardId: string, pixelRatio = 2, print = fa
     if (print) {
       const w = window.open('', '_blank');
       if (!w) return;
-      w.document.write(`<!doctype html><title>${title}</title><style>body{margin:0}img{width:100%}</style><img src="${url}" onload="window.print()">`);
+      w.document.write(`<!doctype html><title>${title}</title><style>body{margin:0}img{width:100%}</style><img src="${url}">`);
       w.document.close();
+      const img = w.document.querySelector('img');
+      if (img?.complete) w.print();
+      else if (img) img.onload = () => w.print();
     } else {
       const a = document.createElement('a');
       a.href = url;

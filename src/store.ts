@@ -15,7 +15,8 @@ export type Modal =
   | { kind: 'fileInfo'; id: string }
   | { kind: 'imageSearch'; at?: { x: number; y: number; columnId?: string | null; index?: number } }
   | { kind: 'aiIdeas'; at?: { x: number; y: number } }
-  | { kind: 'boardPassword'; id: string; mode: 'set' | 'unlock' | 'remove' };
+  | { kind: 'boardPassword'; id: string; mode: 'set' | 'unlock' | 'remove' }
+  | { kind: 'account' };
 export type Theme = 'system' | 'light' | 'dark';
 
 export interface State {
@@ -38,6 +39,7 @@ export interface State {
   captionEditId: string | null;
   presenting: boolean;
   authEnabled: boolean;
+  user: api.User | null;
   // Viewing a published board: nothing can be changed or saved.
   readOnly: boolean;
   publicRoot: string | null;
@@ -84,6 +86,7 @@ let state: State = {
   captionEditId: null,
   presenting: false,
   authEnabled: false,
+  user: null,
   readOnly: false,
   publicRoot: null,
 };
@@ -171,10 +174,10 @@ window.addEventListener('beforeunload', (e) => {
 
 export async function load() {
   try {
-    const { elements, auth } = await api.fetchState();
+    const { elements, auth, user } = await api.fetchState();
     const map: Record<string, El> = {};
     for (const el of elements) map[el.id] = el;
-    setState({ elements: map, loaded: true, loadError: null, authEnabled: auth });
+    setState({ elements: map, loaded: true, loadError: null, authEnabled: auth, user });
     if (state.boardId !== ROOT_ID && !map[state.boardId]) navigate(ROOT_ID);
   } catch (err) {
     setState({ loadError: err instanceof Error ? err.message : String(err) });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { load, patchElement, setState, toast, useElement } from '../store';
+import { getState, load, patchElement, setState, toast, useElement } from '../store';
 import type { ElementOf } from '../types';
 import * as api from '../api';
 import { addAiIdeas, insertSearchImage, type ImageResult } from '../moreActions';
@@ -294,6 +294,111 @@ export function BoardPasswordModal({ id, mode }: { id: string; mode: 'set' | 'un
         <button className="primary" onClick={() => void submit()} disabled={busy || !password}>
           {mode === 'set' ? t('Protect board') : mode === 'unlock' ? t('Unlock board') : t('Remove password')}
         </button>
+      </div>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------- account
+
+const MIN_PASSWORD = 8;
+
+export function AccountModal() {
+  const user = getState().user;
+  const [name, setName] = useState(user?.name ?? '');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [error, setError] = useState<{ part: string; text: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const run = async (part: string, fn: () => Promise<void>) => {
+    setBusy(part);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError({ part, text: t(err instanceof Error ? err.message : String(err)) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const errorFor = (part: string) => error?.part === part && <p className="error-text">{error.text}</p>;
+
+  const saveName = () =>
+    run('name', async () => {
+      await api.postJson('/api/account/profile', { name });
+      await load();
+      toast('Saved');
+    });
+  const changePassword = () =>
+    run('password', async () => {
+      if (next.length < MIN_PASSWORD) throw new Error('Use at least 8 characters for your password.');
+      if (next !== confirm) throw new Error("The passwords don't match");
+      await api.postJson('/api/account/password', { current, next });
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+      toast('Password changed. Other devices were signed out.');
+    });
+  const deleteAccount = () =>
+    run('delete', async () => {
+      await api.postJson('/api/account/delete', { password: deletePassword });
+      location.reload();
+    });
+
+  return (
+    <Dialog title="Account">
+      <div className="account-body">
+        <div className="export-section account-section">
+          <p className="side-sub">{t('Signed in as {email}', { email: user?.email ?? '' })}</p>
+          <label className="field-label" htmlFor="account-name">
+            {t('Name')}
+          </label>
+          <div className="row-input">
+            <input id="account-name" value={name} maxLength={80} autoComplete="name" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveName()} />
+            <button onClick={() => void saveName()} disabled={busy === 'name' || name === (user?.name ?? '')}>
+              {t('Save')}
+            </button>
+          </div>
+          {errorFor('name')}
+        </div>
+        <form
+          className="export-section account-section"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void changePassword();
+          }}
+        >
+          <h3>{t('Change password')}</h3>
+          <input type="email" value={user?.email ?? ''} autoComplete="username" readOnly hidden />
+          <input type="password" placeholder={t('Current password')} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          <input type="password" placeholder={t('New password')} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+          <input type="password" placeholder={t('Confirm new password')} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          {errorFor('password')}
+          <button className="primary" type="submit" disabled={busy === 'password' || !current || !next || !confirm}>
+            {t('Change password')}
+          </button>
+        </form>
+        <div className="export-section account-section">
+          <button onClick={() => void api.logout()}>{t('Sign out')}</button>
+        </div>
+        <form
+          className="export-section account-section danger-zone"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void deleteAccount();
+          }}
+        >
+          <h3>{t('Delete account')}</h3>
+          <p className="side-sub">{t('This permanently deletes your account, every board and card in it, and your uploaded files. It cannot be undone.')}</p>
+          <input type="password" placeholder={t('Enter your password to confirm')} autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} />
+          {errorFor('delete')}
+          <button className="danger-btn" type="submit" disabled={busy === 'delete' || !deletePassword}>
+            {t('Delete my account')}
+          </button>
+        </form>
       </div>
     </Dialog>
   );

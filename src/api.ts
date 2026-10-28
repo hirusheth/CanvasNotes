@@ -13,9 +13,23 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchState(): Promise<{ elements: El[]; auth: boolean }> {
-  const data = await json<{ elements: El[]; auth?: boolean }>(await fetch('/api/state'));
-  return { elements: data.elements, auth: !!data.auth };
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+// Browser-stored state that belongs to one account (viewports, recently viewed
+// boards…) is keyed by user, so two people sharing a browser don't mix them.
+let currentUserId = '';
+export function userKey(key: string): string {
+  return currentUserId ? `${key}:${currentUserId}` : key;
+}
+
+export async function fetchState(): Promise<{ elements: El[]; auth: boolean; user: User | null }> {
+  const data = await json<{ elements: El[]; auth?: boolean; user?: User }>(await fetch('/api/state'));
+  currentUserId = data.user?.id ?? '';
+  return { elements: data.elements, auth: !!data.auth, user: data.user ?? null };
 }
 
 export async function fetchPublic(token: string): Promise<{ board: string; elements: El[] }> {

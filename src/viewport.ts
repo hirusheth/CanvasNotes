@@ -3,6 +3,7 @@
 // element, used for lines, drop targets and "fit to content".
 import { useSyncExternalStore } from 'react';
 import type { Rect, Viewport } from './types';
+import { userKey } from './api';
 
 const DEFAULT_VP: Viewport = { x: 120, y: 90, zoom: 1 };
 export const MIN_ZOOM = 0.1;
@@ -16,7 +17,7 @@ export function getViewport(boardId: string): Viewport {
   if (!viewports[boardId]) {
     let vp = DEFAULT_VP;
     try {
-      const raw = localStorage.getItem(`cn:vp:${boardId}`);
+      const raw = localStorage.getItem(userKey(`cn:vp:${boardId}`));
       if (raw) {
         const parsed = JSON.parse(raw);
         if ([parsed.x, parsed.y, parsed.zoom].every((n) => typeof n === 'number' && Number.isFinite(n))) vp = parsed;
@@ -33,7 +34,7 @@ export function setViewport(boardId: string, vp: Viewport) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      localStorage.setItem(`cn:vp:${boardId}`, JSON.stringify(viewports[boardId]));
+      localStorage.setItem(userKey(`cn:vp:${boardId}`), JSON.stringify(viewports[boardId]));
     } catch {}
   }, 300);
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { escapeHtml } from '../sanitize';
 import { addElements, boardPath, commit, getState, makeElement, patchElement, patchElements, setState, useElement, useStore } from '../store';
 import { LABEL_COLORS, LABELS_PARENT, ROOT_ID, type El, type ElementOf } from '../types';
 import { RichText } from '../elements/RichText';
@@ -7,7 +8,7 @@ import { wordCount } from '../elements/MoreBodies';
 import { downloadText, htmlToMarkdown, htmlToWordDoc, printHtml, safeFileName } from '../markdown';
 import { htmlToText, pickFiles } from '../actions';
 import * as api from '../api';
-import { AiIdeasModal, BoardPasswordModal, CropModal, FileInfoModal, ImageSearchModal } from './MoreModals';
+import { AiIdeasModal, BoardPasswordModal, AccountModal, CropModal, FileInfoModal, ImageSearchModal } from './MoreModals';
 import { t } from '../i18n';
 
 const close = () => setState({ modal: null });
@@ -36,6 +37,8 @@ export function ModalHost() {
       return <AiIdeasModal at={modal.at} />;
     case 'boardPassword':
       return <BoardPasswordModal id={modal.id} mode={modal.mode} />;
+    case 'account':
+      return <AccountModal />;
   }
 }
 
@@ -65,7 +68,7 @@ function DocumentModal({ id }: { id: string }) {
   const exports: [string, () => void][] = [
     ['Markdown', () => downloadText(`${name}.md`, `# ${title || t('Untitled')}\n\n${htmlToMarkdown(html)}\n`, 'text/markdown')],
     ['Plain text', () => downloadText(`${name}.txt`, `${title}\n\n${htmlToText(html)}\n`)],
-    ['Word document', () => downloadText(`${name}.doc`, htmlToWordDoc(title, `<h1>${title}</h1>${html}`), 'application/msword')],
+    ['Word document', () => downloadText(`${name}.doc`, htmlToWordDoc(title, `<h1>${escapeHtml(title)}</h1>${html}`), 'application/msword')],
     ['PDF (print)', () => printHtml(title || 'Document', `<h1>${title}</h1>${html}`)],
   ];
   return (

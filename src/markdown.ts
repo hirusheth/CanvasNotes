@@ -1,5 +1,6 @@
 // Converts the HTML that TipTap produces into Markdown, for document and
 // board exports. Handles the node types the editor can create.
+import { escapeHtml, sanitizeHtml } from './sanitize';
 
 function inline(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return (node.textContent || '').replace(/([*_`])/g, '\\$1');
@@ -103,7 +104,7 @@ export function downloadText(filename: string, text: string, mime = 'text/plain'
 
 // A Word-compatible document: Word opens HTML saved with the msword type.
 export function htmlToWordDoc(title: string, html: string) {
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${title}</title></head><body>${html}</body></html>`;
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${sanitizeHtml(html)}</body></html>`;
 }
 
 export function safeFileName(name: string) {
@@ -111,10 +112,13 @@ export function safeFileName(name: string) {
 }
 
 export function printHtml(title: string, html: string) {
+  // The print window shares this site's origin, so only cleaned HTML goes in.
   const w = window.open('', '_blank');
   if (!w) return;
   w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font:15px/1.6 system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#222}img{max-width:100%}pre{background:#f4f4f4;padding:10px;border-radius:6px}blockquote{border-left:3px solid #ccc;margin:0;padding-left:12px;color:#555}[data-callout]{background:#fff6d6;padding:8px 12px;border-radius:6px}</style></head><body>${html}<script>window.onload=()=>{window.print()}<\/script></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font:15px/1.6 system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#222}img{max-width:100%}pre{background:#f4f4f4;padding:10px;border-radius:6px}blockquote{border-left:3px solid #ccc;margin:0;padding-left:12px;color:#555}[data-callout]{background:#fff6d6;padding:8px 12px;border-radius:6px}</style></head><body>${sanitizeHtml(html)}</body></html>`,
   );
   w.document.close();
+  // Printed from here: the site's security policy blocks scripts inside the new window.
+  setTimeout(() => w.print(), 300);
 }

@@ -246,10 +246,21 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
       >
         {t('Toggle dark mode')}
       </button>
-      {getState().authEnabled && (
-        <button className="danger" onClick={() => void api.logout()}>
-          {t('Sign out')}
-        </button>
+      {getState().user && (
+        <>
+          <button
+            onClick={() => {
+              onClose();
+              setState({ modal: { kind: 'account' } });
+            }}
+          >
+            {t('Account')}
+            <span className="menu-hint">{getState().user!.email}</span>
+          </button>
+          <button className="danger" onClick={() => void api.logout()}>
+            {t('Sign out')}
+          </button>
+        </>
       )}
       <button
         onClick={() => {

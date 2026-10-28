@@ -1,5 +1,6 @@
 // User-level operations shared by the toolbar, keyboard, menus and canvas.
 import { t } from './i18n';
+import { htmlToTextSafe } from './sanitize';
 import * as api from './api';
 import {
   addElements,
@@ -328,9 +329,7 @@ export function moveToBoard(ids: string[], targetBoardId: string) {
 // ---------------------------------------------------------------- text helpers
 
 export function htmlToText(html: string) {
-  const div = document.createElement('div');
-  div.innerHTML = html.replace(/<\/(p|h\d|li|blockquote|pre)>/g, '$&\n');
-  return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  return htmlToTextSafe(html.replace(/<\/(p|h\d|li|blockquote|pre)>/g, '$&\n')).replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function plainText(el: El): string {

@@ -472,8 +472,8 @@ export function applyStarterTemplate(templateId: string, at: { x: number; y: num
 
 export function seedWelcomeBoard() {
   try {
-    if (localStorage.getItem('cn:welcomed')) return;
-    localStorage.setItem('cn:welcomed', '1');
+    if (localStorage.getItem(api.userKey('cn:welcomed'))) return;
+    localStorage.setItem(api.userKey('cn:welcomed'), '1');
   } catch {
     return;
   }
