@@ -4,9 +4,13 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "5180:5180"
+      # Only reachable through the HTTPS proxy on this machine (see README).
+      - "127.0.0.1:5180:5180"
     environment:
-      # Required when the app is reachable from other devices.
-      CANVASNOTES_PASSWORD: ${CANVASNOTES_PASSWORD:?set CANVASNOTES_PASSWORD in .env}
+      # open | closed (the first account is always allowed)
+      CANVASNOTES_SIGNUPS: ${CANVASNOTES_SIGNUPS:-open}
+      CANVASNOTES_INVITE_CODE: ${CANVASNOTES_INVITE_CODE:-}
+      # Behind Caddy/nginx: rate limits use the real client IP.
+      CANVASNOTES_TRUST_PROXY: ${CANVASNOTES_TRUST_PROXY:-1}
     volumes:
       - ./data:/data

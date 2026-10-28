@@ -61,7 +61,7 @@ export async function fetchImportable(raw) {
     throw Object.assign(new Error('Invalid URL'), { status: 400 });
   }
   if (url.protocol !== 'https:' || url.hostname !== 'upload.wikimedia.org') throw Object.assign(new Error('Only Wikimedia Commons images can be imported'), { status: 400 });
-  const res = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000) });
+  const res = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000), redirect: 'error' });
   const type = res.headers.get('content-type') || '';
   if (!res.ok || !type.startsWith('image/')) throw Object.assign(new Error('Could not download that image'), { status: 502 });
   const buf = Buffer.from(await res.arrayBuffer());

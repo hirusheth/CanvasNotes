@@ -1,5 +1,7 @@
 // Board-level features that need the server's authority: password-protected
 // boards (contents are withheld until unlocked) and read-only public links.
+// Everything is per account: `userId` is the signed-in user (or, for a public
+// link, the board's owner).
 import crypto from 'node:crypto';
 
 const UNLOCK_COOKIE = 'cn_unlocked';
@@ -39,7 +41,8 @@ export function createBoards({ store, secret }) {
     if (addId) ids.add(addId);
     const value = [...ids].filter((id) => locks.has(id)).map((id) => `${id}.${sign(id, locks.get(id))}`).join(',');
     // No Max-Age: protected boards lock again when the browser closes, like Milanote.
-    return `${UNLOCK_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax`;
+    const secure = req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted ? '; Secure' : '';
+    return `${UNLOCK_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${secure}`;
   };
 
   // Everything below a set of boards (sub-boards included).
@@ -62,18 +65,20 @@ export function createBoards({ store, secret }) {
     return out;
   };
 
-  const limited = (req) => {
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+  let filesCache = { version: -1, files: new Set() };
+
+  // Wrong board passwords, counted per account.
+  const limited = (req, userId) => {
     const now = Date.now();
-    const recent = (attempts.get(ip) || []).filter((t) => now - t < 15 * 60 * 1000);
-    attempts.set(ip, recent);
+    const recent = (attempts.get(userId) || []).filter((t) => now - t < 15 * 60 * 1000);
+    attempts.set(userId, recent);
     return { blocked: recent.length >= 10, fail: () => recent.push(now) };
   };
 
   return {
     // The elements this request may see, with protected boards marked.
-    visible(req, elements = store.all()) {
-      const locks = store.locks();
+    visible(req, userId, elements = store.all(userId)) {
+      const locks = store.locks(userId);
       if (locks.size === 0) return elements;
       const unlocked = unlockedFor(req, locks);
       const lockedRoots = [...locks.keys()].filter((id) => !unlocked.has(id));
@@ -84,21 +89,21 @@ export function createBoards({ store, secret }) {
     },
 
     // POST /api/board-lock { id, password } — add or change a board's password.
-    lock(req, { id, password }) {
-      if (!id || typeof password !== 'string' || password.length < 1) return { status: 400, body: { error: 'Board and password required' } };
-      const locks = store.locks();
+    lock(req, userId, { id, password } = {}) {
+      if (!id || typeof id !== 'string' || typeof password !== 'string' || password.length < 1) return { status: 400, body: { error: 'Board and password required' } };
+      const locks = store.locks(userId);
       if (locks.has(id) && !unlockedFor(req, locks).has(id)) return { status: 403, body: { error: 'Unlock the board first' } };
       const salt = crypto.randomBytes(16).toString('hex');
-      store.setLock(id, salt, hashPassword(password, salt));
-      const after = store.locks();
+      store.setLock(userId, id, salt, hashPassword(password, salt));
+      const after = store.locks(userId);
       return { status: 200, body: { ok: true }, headers: { 'set-cookie': unlockCookie(req, after, id) } };
     },
 
     // POST /api/board-unlock { id, password }
-    unlock(req, { id, password }) {
-      const rate = limited(req);
+    unlock(req, userId, { id, password } = {}) {
+      const rate = limited(req, userId);
       if (rate.blocked) return { status: 429, body: { error: 'Too many attempts. Try again in a few minutes.' } };
-      const locks = store.locks();
+      const locks = store.locks(userId);
       const lock = locks.get(id);
       if (!lock) return { status: 404, body: { error: 'This board has no password' } };
       if (!verify(lock, password)) {
@@ -109,21 +114,28 @@ export function createBoards({ store, secret }) {
     },
 
     // POST /api/board-unlock-remove { id, password } — remove protection.
-    removeLock(req, { id, password }) {
-      const locks = store.locks();
+    removeLock(req, userId, { id, password } = {}) {
+      const rate = limited(req, userId);
+      if (rate.blocked) return { status: 429, body: { error: 'Too many attempts. Try again in a few minutes.' } };
+      const locks = store.locks(userId);
       const lock = locks.get(id);
       if (!lock) return { status: 200, body: { ok: true } };
-      if (!verify(lock, password)) return { status: 401, body: { error: 'The password is incorrect' } };
-      store.removeLock(id);
+      if (!verify(lock, password)) {
+        rate.fail();
+        return { status: 401, body: { error: 'The password is incorrect' } };
+      }
+      store.removeLock(userId, id);
       return { status: 200, body: { ok: true } };
     },
 
     // GET /api/public/:token — a published board, read-only, without signing in.
     published(token) {
-      const all = store.all();
-      const board = all.find((el) => el.type === 'board' && el.section !== 'trash' && token && el.content?.publicToken === token);
+      const owner = token ? store.publisherOf(token) : null;
+      if (owner === null) return null;
+      const all = store.all(owner);
+      const board = all.find((el) => el.type === 'board' && el.section !== 'trash' && el.content?.publicToken === token);
       if (!board) return null;
-      const locks = store.locks();
+      const locks = store.locks(owner);
       const lockedInside = [...locks.keys()];
       const hidden = descendants(all, lockedInside);
       const inside = descendants(all, [board.id]);
@@ -132,17 +144,22 @@ export function createBoards({ store, secret }) {
     },
 
     // Uploaded files referenced by published boards may be fetched without signing in.
+    // Recomputed only after something was saved.
     publishedFiles() {
+      if (filesCache.version === store.version) return filesCache.files;
       const files = new Set();
-      for (const el of store.all()) {
-        if (el.type !== 'board' || !el.content?.publicToken || el.section === 'trash') continue;
-        const pub = this.published(el.content.publicToken);
-        for (const item of pub?.elements || []) {
-          for (const src of [item.content?.src, item.content?.background, item.content?.iconImage, item.content?.image]) {
-            if (typeof src === 'string' && src.startsWith('/files/')) files.add(src);
+      for (const owner of store.publishers()) {
+        for (const el of store.all(owner)) {
+          if (el.type !== 'board' || !el.content?.publicToken || el.section === 'trash') continue;
+          const pub = this.published(el.content.publicToken);
+          for (const item of pub?.elements || []) {
+            for (const src of [item.content?.src, item.content?.background, item.content?.iconImage, item.content?.image]) {
+              if (typeof src === 'string' && src.startsWith('/files/')) files.add(src);
+            }
           }
         }
       }
+      filesCache = { version: store.version, files };
       return files;
     },
   };
