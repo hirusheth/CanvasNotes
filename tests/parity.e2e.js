@@ -100,7 +100,8 @@ async (page) => {
     await page.evaluate(
       async ({ x, y, name, mime, content }) => {
         let data = content;
-        if (content.startsWith('data:')) data = await (await fetch(content)).blob();
+        // Decoded by hand: the app's CSP (connect-src 'self') blocks fetch() of data: URLs.
+        if (content.startsWith('data:')) data = Uint8Array.from(atob(content.split(',')[1]), (c) => c.charCodeAt(0));
         const file = new File([data], name, { type: mime });
         const dt = new DataTransfer();
         dt.items.add(file);
@@ -899,7 +900,10 @@ async (page) => {
     await wait(300);
     const before = new Set((await api()).map((e) => e.id));
     await page.locator('.template-row', { hasText: 'B Card tools' }).first().click();
-    const copy = await created(before, 'board');
+    await settle();
+    // The template holds a sub-board too, so two boards are new: take the one placed on Home.
+    const copy = (await api()).find((e) => !before.has(e.id) && e.type === 'board' && e.parentId === 'root');
+    assert(copy, 'no copy of the template on Home');
     assert((await api()).filter((e) => e.parentId === copy.id).length > 0, 'template copy is empty');
   });
   await check('F6', 'Trash: delete, restore, empty', async () => {
@@ -945,7 +949,10 @@ async (page) => {
     if ((await pw.count()) > 1) await pw.nth(1).fill('pw-1234');
     await page.keyboard.press('Enter');
     await wait(600);
-    const anon = await (await fetch(`${BASE}/api/state`)).json();
+    // Signed in (session cookie) but without this browser's unlock cookie.
+    const sid = (await page.context().cookies(BASE)).find((c) => c.name === 'cn_sid');
+    const anon = await (await fetch(`${BASE}/api/state`, { headers: { cookie: `cn_sid=${sid.value}` } })).json();
+    assert(anon.elements.length > 0, 'state empty: session not accepted');
     assert(!anon.elements.some((e) => e.parentId === boardA3.id), 'contents leaked to a request without the unlock cookie');
     const r = await page.request.post(`${BASE}/api/board-unlock-remove`, { data: { id: boardA3.id, password: 'pw-1234' } });
     assert(r.ok(), 'could not remove');
@@ -1518,7 +1525,8 @@ async (page) => {
   await check('K19', 'Export board as PDF (print)', async () => {
     await page.evaluate(() => {
       window.__printed = '';
-      window.open = () => ({ document: { write: (h) => (window.__printed += h), close() {} } });
+      window.__printCalled = false;
+      window.open = () => ({ document: { write: (h) => (window.__printed += h), close() {}, querySelector: () => ({ complete: true }) }, print: () => (window.__printCalled = true) });
     });
     await page.locator('.topbar button[title="Export board"]').click();
     await wait(300);
@@ -1528,7 +1536,8 @@ async (page) => {
     if (!printed) throw new Error(`nothing printed; toast: ${await page.locator('.toast').allInnerTexts()}; errors: ${errors.slice(-2)}`);
     const html = await page.evaluate(() => window.__printed);
     await page.keyboard.press('Escape');
-    assert(/<img src="data:image\/png/.test(html) && /window\.print\(\)/.test(html), html.slice(0, 120));
+    // The print window has no inline script (the CSP would block it); the app calls print() on it.
+    assert(/<img src="data:image\/png/.test(html) && (await page.evaluate(() => window.__printCalled)), html.slice(0, 120));
     return `${Math.round((Date.now() - t0) / 1000)} s`;
   });
   await check('K20', 'Install to home screen: manifest, icons, standalone', async () => {
@@ -1541,31 +1550,16 @@ async (page) => {
     assert(await page.locator('meta[name="apple-mobile-web-app-capable"], link[rel="apple-touch-icon"]').count(), 'no iOS home-screen tags');
     return `${m.name}, ${m.display}, icons ${sizes.join(' ')}`;
   });
-  await check('K21', 'Hosted: password sign-in, signed one-year cookie, rate limit, HTTPS-aware', async () => {
-    const AUTH = page.__authBase;
-    assert(AUTH, 'no password server (the runner starts one for section K)');
-    const req = page.context().request;
-    const locked = await req.get(`${AUTH}/api/state`);
-    assert(locked.status() === 401, `state without cookie: ${locked.status()}`);
-    const wrong = await req.post(`${AUTH}/api/login`, { data: { password: 'nope' }, headers: { 'x-forwarded-for': '10.9.9.1' } });
-    assert(wrong.status() === 401, `wrong password: ${wrong.status()}`);
-    const ok = await req.post(`${AUTH}/api/login`, { data: { password: page.__authPassword }, headers: { 'x-forwarded-proto': 'https', 'x-forwarded-for': '10.9.9.2' } });
-    const cookie = ok.headers()['set-cookie'] || '';
-    assert(ok.ok() && /HttpOnly/i.test(cookie) && /Max-Age=31536000/.test(cookie) && /Secure/.test(cookie), `cookie: ${cookie}`);
-    let last;
-    for (let i = 0; i < 11; i++) last = await req.post(`${AUTH}/api/login`, { data: { password: 'bad' }, headers: { 'x-forwarded-for': '10.9.9.3' } });
-    assert(last.status() === 429, `after 11 wrong tries: ${last.status()}`);
-    // The real sign-in page, in a separate browser context.
+  await check('K21', 'Hosted: signed-out visitors get the sign-in page; the session cookie is HttpOnly and lasts a year', async () => {
     const ctx = await page.context().browser().newContext();
     try {
       const p = await ctx.newPage();
-      await p.goto(AUTH);
+      await p.goto(BASE);
       assert(/Sign in/.test(await p.title()), `title ${await p.title()}`);
-      await p.fill('#p', page.__authPassword);
-      await p.click('button');
-      await p.waitForSelector('.toolbar', { timeout: 8000 });
-      const state = await p.request.get(`${AUTH}/api/state`);
-      assert(state.ok(), `state after sign-in: ${state.status()}`);
+      const state = await p.request.get(`${BASE}/api/state`);
+      assert(state.status() === 401, `state without a session: ${state.status()}`);
+      const cookie = (await page.context().cookies(BASE)).find((c) => c.name === 'cn_sid');
+      assert(cookie && cookie.httpOnly && cookie.expires - Date.now() / 1000 > 360 * 86400, `session cookie ${JSON.stringify(cookie)}`);
     } finally {
       await ctx.close();
     }
@@ -1582,7 +1576,7 @@ async (page) => {
     // A fresh board every run: the gestures need empty space.
     boardJ = await enterBoard(`J Touch ${Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 5)}`);
     await home();
-    tctx = await page.context().browser().newContext({ hasTouch: true, isMobile: true, viewport: { width: 393, height: 852 }, deviceScaleFactor: 2 });
+    tctx = await page.context().browser().newContext({ hasTouch: true, isMobile: true, viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, storageState: await page.context().storageState() });
     tp = await tctx.newPage();
     cdp = await tctx.newCDPSession(tp);
     await tp.goto(`${BASE}/#/b/${boardJ.id}`);

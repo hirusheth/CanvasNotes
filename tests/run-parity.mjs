@@ -1,11 +1,9 @@
 // Runs tests/parity.e2e.js in headless Chrome against a running Canvas Notes.
 //   CANVASNOTES_URL=http://127.0.0.1:5180 node tests/run-parity.mjs [sections]
 // Use an empty DATA_DIR: the checks create their own boards. Sections default to all (A–K).
-// Section K also starts a second, password-protected server (port 5191) for the sign-in check.
-import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+// The runner signs up a fresh account first; accounts themselves are tested by
+// tests/run-accounts.mjs.
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 
 const sections = process.argv[2] || 'ABCDEFGHIJK';
@@ -16,23 +14,11 @@ const page = await context.newPage();
 page.__sections = sections;
 page.__base = process.env.CANVASNOTES_URL || 'http://127.0.0.1:5180';
 
-let authServer, authDir;
-if (sections.includes('K')) {
-  authDir = await mkdtemp(path.join(tmpdir(), 'canvasnotes-auth-'));
-  const port = 5191;
-  page.__authPassword = 'parity-secret';
-  authServer = spawn(process.execPath, [new URL('../server/index.mjs', import.meta.url).pathname], {
-    env: { ...process.env, PORT: String(port), DATA_DIR: authDir, CANVASNOTES_PASSWORD: page.__authPassword },
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 40; i++) {
-    const up = await fetch(`http://127.0.0.1:${port}/manifest.webmanifest`).then((r) => r.ok, () => false);
-    if (up) {
-      page.__authBase = `http://127.0.0.1:${port}`;
-      break;
-    }
-    await new Promise((r) => setTimeout(r, 150));
-  }
+const email = `parity-${Date.now()}@example.com`;
+const signup = await context.request.post(`${page.__base}/api/signup`, { data: { email, password: 'parity-password' } });
+if (!signup.ok()) {
+  console.error(`Could not create the test account: ${signup.status()} ${await signup.text()}`);
+  process.exit(1);
 }
 
 const source = await readFile(new URL('./parity.e2e.js', import.meta.url), 'utf8');
@@ -40,8 +26,6 @@ const run = (0, eval)(source);
 const started = Date.now();
 const result = await run(page);
 await browser.close();
-authServer?.kill();
-if (authDir) await rm(authDir, { recursive: true, force: true });
 
 for (const line of result.passed) console.log(`PASS ${line}`);
 for (const f of result.failed) console.log(`FAIL ${f.id} ${f.name} — ${f.detail}`);
